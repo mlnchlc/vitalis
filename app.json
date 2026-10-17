@@ -1,0 +1,51 @@
+{
+  "configVersion": "v3",
+  "app": {
+    "appId": 1000001,
+    "appName": "Bip6 Face",
+    "appType": "watchface",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
+    "icon": "icon.png",
+    "vender": "zepp",
+    "description": "A simple digital watchface for the Amazfit Bip 6"
+  },
+  "permissions": [
+    "data:user.hd.heart_rate",
+    "data:user.hd.step"
+  ],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "3.0.0",
+      "target": "3.0.0",
+      "minVersion": "3.0.0"
+    }
+  },
+  "targets": {
+    "bip6": {
+      "module": {
+        "watchface": {
+          "path": "watchface/index",
+          "main": 1,
+          "editable": 0,
+          "lockscreen": 0,
+          "hightCost": 0
+        }
+      },
+      "platforms": [
+        { "name": "bip6", "deviceSource": 9765120 },
+        { "name": "bip6", "deviceSource": 9765121 },
+        { "name": "bip6", "deviceSource": 10158337 }
+      ],
+      "designWidth": 390
+    }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "Bip6 Face"
+    }
+  },
+  "defaultLanguage": "en-US"
+}

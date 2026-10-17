@@ -1,0 +1,14 @@
+{
+  "name": "bip6-watchface",
+  "version": "1.0.0",
+  "description": "Zepp OS watchface for the Amazfit Bip 6",
+  "private": true,
+  "scripts": {
+    "dev": "zeus dev",
+    "preview": "zeus preview",
+    "build": "zeus build"
+  },
+  "devDependencies": {
+    "@zeppos/device-types": "^3.0.0"
+  }
+}
