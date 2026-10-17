@@ -37,7 +37,7 @@ WatchFace({
       w: SCREEN_WIDTH,
       h: 150,
       color: COLORS.primary,
-      text_size: 130,
+      text_size: 110,
       align_h: align.CENTER_H,
       align_v: align.CENTER_V,
       text_style: text_style.NONE
