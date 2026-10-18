@@ -8,7 +8,11 @@ import {
   SYSTEM_APP_SLEEP,
   SYSTEM_APP_PRESSURE,
   SYSTEM_APP_PAI,
-  SYSTEM_APP_WEATHER
+  SYSTEM_APP_WEATHER,
+  SYSTEM_APP_ALARM,
+  SYSTEM_APP_CALENDAR,
+  SYSTEM_APP_SETTING,
+  SYSTEM_APP_READINESS
 } from '@zos/router'
 import * as zosUI from '@zos/ui'
 import { getScene, SCENE_AOD } from '@zos/app'
@@ -118,7 +122,12 @@ function tap(x, y, w, h, overlay, appId) {
     normal_src: `press/${overlay}.png`,
     press_src: `press/${overlay}_press.png`,
     show_level: NORMAL,
-    click_func: () => launchApp({ appId, native: true })
+    click_func: () => {
+      // An app the watch doesn't have (e.g. Readiness) just does nothing
+      try {
+        launchApp({ appId, native: true })
+      } catch (e) {}
+    }
   })
 }
 
@@ -220,7 +229,10 @@ WatchFace({
     this.safely('status', () => this.buildStatus())
     this.safely('battery', () => this.buildBattery())
     this.safely('lines', () => DIVIDERS.forEach(hline))
-    this.safely('time', () => bigTime('time', NORMAL))
+    this.safely('time', () => {
+      bigTime('time', NORMAL)
+      tap(24, TIME_Y, 342, 116, 'time', SYSTEM_APP_ALARM)
+    })
     this.safely('date', () => this.buildDate())
     this.safely('weather', () => this.buildWeather())
     this.safely('vitals', () => this.buildVitals())
@@ -313,6 +325,8 @@ WatchFace({
       BATTERY_CY - Math.round(b.h / 2),
       3 * b.digit_w + b.pct
     )
+    // Status icons + battery together open Settings
+    tap(RIGHT_X - 10, 24, 134, 104, 'status', SYSTEM_APP_SETTING)
   },
 
   // ---- middle: date (positions computed by gen_assets.py) ----
@@ -321,6 +335,7 @@ WatchFace({
     // Weekday is drawn by refreshAccent(): its colour follows the time of day
     this.weekday = img(R.week.x, R.week.y, 'date/week_day_0.png')
     dateGroup({ day: 'day', month: 'month' }, R, NORMAL)
+    tap(24, R.week.y - 3, 342, 24, 'date', SYSTEM_APP_CALENDAR)
   },
 
   // ---- middle: weather, four equal columns ----
@@ -400,7 +415,17 @@ WatchFace({
     img(C.uv.iconX, C.uv.iconY, 'icon/uv.png')
     value('tile', { x: C.uv.x, y: C.uv.y, w: C.uv.w, type: hmUI.data_type.UVI, invalid_image: invalid })
 
-    const apps = { hr: SYSTEM_APP_HR, spo2: SYSTEM_APP_SPO2, stress: SYSTEM_APP_PRESSURE, sleep: SYSTEM_APP_SLEEP, pai: SYSTEM_APP_PAI }
+    // Every cell opens the closest system app
+    const apps = {
+      hr: SYSTEM_APP_HR,
+      spo2: SYSTEM_APP_SPO2,
+      hrv: SYSTEM_APP_HR,
+      stress: SYSTEM_APP_PRESSURE,
+      hybrid: SYSTEM_APP_READINESS,
+      sleep: SYSTEM_APP_SLEEP,
+      pai: SYSTEM_APP_PAI,
+      uv: SYSTEM_APP_WEATHER
+    }
     Object.keys(apps).forEach((key) => tap(C[key].col, C[key].top + 2, colW, 32, 'cell', apps[key]))
     // Column separators, shared by both rows
     ;['spo2', 'hrv', 'stress'].forEach((key) => {
