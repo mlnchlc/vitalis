@@ -57,7 +57,7 @@ SS = 4  # supersampling factor for icons and shapes
 # y 303, and a 2 x 4 vitals block whose rows are centred on y 348 and 396.
 MARGIN_X0, MARGIN_X1 = 24, 366
 DATE_CY = 274
-WEATHER_CY = 303
+WEATHER_CY = 301
 VITAL_ROWS = (348, 396)
 VITALS = (('hr', 'spo2', 'hrv', 'stress'), ('hybrid', 'sleep', 'pai', 'uv'))
 ICON, GAP = 24, 6  # value icons and the icon-to-value gap used everywhere
@@ -83,13 +83,13 @@ def tint(mask, color):
 EXTRAS = {'colon': ':', 'dot': '.', 'slash': '/', 'pct': '%', 'deg': '°', 'minus': '-', 'invalid': '--'}
 
 
-def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None, proportional=False):
+def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None, proportional=False, compact_deg=False):
     """top: shared distance above the baseline (negative) so several sets line up.
     proportional: each digit keeps its own width (no gap around "1"); slots are
     still sized from the widest digit."""
     font = ImageFont.truetype(BARLOW[weight], size)
     if top is None:
-        probe = '0123456789%' + ('°' if 'deg' in extras else '')
+        probe = '0123456789%' + ('°' if 'deg' in extras and not compact_deg else '')
         top = font.getbbox(probe, anchor='ls')[1]  # negative: distance above baseline
     h = -top + 1
     digit_w = max(math.ceil(font.getlength(c)) for c in '0123456789') + pad_x
@@ -107,6 +107,14 @@ def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None,
         widths.append(save(glyph(d, None if proportional else digit_w), f'font/{name}/{d}.png').width)
     m['avg_w'] = round(sum(widths) / 10, 1)
     for key in extras:
+        if key == 'deg' and compact_deg:
+            # Keep the set as short as the digits: draw ° with its top on the box top
+            w = math.ceil(font.getlength('°')) + pad_x
+            mask = Image.new('L', (w, h), 0)
+            dtop = font.getbbox('°', anchor='ls')[1]
+            ImageDraw.Draw(mask).text((0, h - 1 + (top - dtop)), '°', font=font, fill=255, anchor='ls')
+            m[key] = save(tint(mask, color), f'font/{name}/deg.png').width
+            continue
         m[key] = save(glyph(EXTRAS[key]), f'font/{name}/{key}.png').width
     metrics[name] = m
 
@@ -324,7 +332,10 @@ def main():
     for zone, c in STRESS_ZONES.items():
         font_set(f'tile_{zone}', 28, c, proportional=True)
     font_set('stat', 22, WHITE, ('dot', 'slash'))
-    font_set('wx', 28, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, proportional=True)
+    # compact_deg: the watch blanks about 2x a number widget's height below it,
+    # so the weather digits must stay as short as the vitals digits (21 px) or
+    # they clip the tops of the first vitals row's icons.
+    font_set('wx', 28, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, proportional=True, compact_deg=True)
     # Date: day/date/month share one height so they share a baseline
     date_top = shared_top(22)
     for phase, c in WEEK_PHASES.items():

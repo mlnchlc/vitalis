@@ -97,7 +97,7 @@ export const M = {
     "slash": 10
   },
   "wx": {
-    "h": 25,
+    "h": 21,
     "digit_w": 13,
     "cap": 20,
     "avg_w": 11.9,
@@ -177,7 +177,7 @@ export const M = {
   "weatherRow": {
     "tempIcon": {
       "x": 34,
-      "y": 292,
+      "y": 288,
       "src": "icon/temp.png"
     },
     "temp": {
@@ -187,7 +187,7 @@ export const M = {
     },
     "highIcon": {
       "x": 125,
-      "y": 298,
+      "y": 294,
       "src": "icon/high.png"
     },
     "high": {
@@ -197,7 +197,7 @@ export const M = {
     },
     "lowIcon": {
       "x": 211,
-      "y": 298,
+      "y": 294,
       "src": "icon/low.png"
     },
     "low": {
@@ -207,7 +207,7 @@ export const M = {
     },
     "humIcon": {
       "x": 285,
-      "y": 292,
+      "y": 288,
       "src": "icon/humidity.png"
     },
     "hum": {
@@ -217,7 +217,7 @@ export const M = {
     },
     "tap": {
       "x": 24,
-      "y": 288,
+      "y": 286,
       "w": 342,
       "h": 30
     }
