@@ -1,4 +1,4 @@
-# Bip6 Health
+# Vitalis
 
 A health- and time-focused watchface for the **Amazfit Bip 6** (Zepp OS, API level 3.0+).
 
