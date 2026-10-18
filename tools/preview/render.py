@@ -42,8 +42,9 @@ def draw_text_img(canvas, w):
     text = w.get('text')
     if text is None:
         text = SAMPLE.get(w.get('type'), '')
-        if w.get('unit_en'):
-            text += 'u'
+    # The watch appends the unit image to any TEXT_IMG that has one, data-bound or not
+    if w.get('unit_en'):
+        text += 'u'
     parts = []
     for ch in text:
         if ch.isdigit():

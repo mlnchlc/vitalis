@@ -515,7 +515,7 @@ WatchFace({
     }
 
     const { value: spo2 } = this.bloodOxygen.getCurrent()
-    if (spo2 > 0) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', `${spo2}u`)
+    if (spo2 > 0) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', String(spo2)) // widget appends the % unit
     else this.showSpo2(null)
 
     const { totalTime } = this.sleep.getInfo()
