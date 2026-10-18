@@ -21,11 +21,12 @@ const widgets = []
 const enumOf = (names) => Object.fromEntries(names.map((n) => [n, n]))
 
 globalThis.hmUI = {
-  widget: enumOf(['IMG', 'TEXT_IMG', 'FILL_RECT', 'BUTTON', 'ARC_PROGRESS', 'IMG_TIME', 'IMG_WEEK', 'IMG_DATE', 'IMG_LEVEL', 'WIDGET_DELEGATE']),
-  data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'HYBRID_CHARGE']),
+  widget: enumOf(['IMG', 'TEXT_IMG', 'FILL_RECT', 'BUTTON', 'ARC_PROGRESS', 'IMG_TIME', 'IMG_WEEK', 'IMG_DATE', 'IMG_LEVEL', 'IMG_STATUS', 'WIDGET_DELEGATE']),
+  data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'UVI', 'HYBRID_CHARGE']),
   align: enumOf(['LEFT', 'RIGHT', 'CENTER_H']),
   prop: enumOf(['TEXT', 'SRC', 'MORE']),
   show_level: { ONLY_NORMAL: 1, ONAL_AOD: 2 },
+  system_status: enumOf(['DISCONNECT', 'DISTURB', 'CLOCK', 'LOCK']),
   createWidget(type, opts = {}) {
     const w = { ...opts, widget: type }
     widgets.push(w)

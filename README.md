@@ -7,9 +7,10 @@ A health- and time-focused watchface for the **Amazfit Bip 6** (Zepp OS, API lev
 | Area | Shows | Tap opens |
 |---|---|---|
 | Top left | Activity rings (steps / calories / stand goal) · steps · kcal · stand hours (now/goal) · km | Activity |
-| Top right | Battery % and bar (green > 40, amber 21–40, red ≤ 20) | – |
+| Top right | Status icons, each shown only while active: Bluetooth disconnected · DND · alarm set · locked<br>Battery % and bar (green > 40, amber 21–40, red ≤ 20) | – |
 | Middle | HH:MM | – |
-| Date row | Day · date · month · current temp · high ▲ / low ▼ · humidity | Weather (weather part) |
+| Date | Day · date · month, centred | – |
+| Weather | Five equal columns: temp · high ▲ · low ▼ · humidity · UV index | Weather |
 | Health tiles | Heart rate · SpO₂ · sleep (h:mm) | Heart Rate / Blood Oxygen / Sleep |
 | Bottom | HybridCharge 0–100 + bar · Stress 0–100 + bar | – / Stress |
 | Always-on | Dim grey time, date, battery | – |
@@ -37,8 +38,7 @@ python3 tools/gen_assets.py   # regenerates assets/bip6/** and watchface/metrics
 npm run preview               # renders preview/normal.png and preview/aod.png from the real index.js
 ```
 
-`gen_assets.py` also computes the date/weather row layout from the real glyph widths and
-fails if it no longer fits. `npm run preview` runs `watchface/index.js` against a stub of the
+`gen_assets.py` also computes the date, weather and tile layouts from the real glyph widths. `npm run preview` runs `watchface/index.js` against a stub of the
 watch UI and draws exactly the widgets it creates. The normal render is also saved as
 `assets/bip6/icon.png`, the watchface-picker preview.
 

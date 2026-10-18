@@ -76,18 +76,50 @@ function ring(cx, cy, radius, color) {
   return (level) => arc.setProperty(hmUI.prop.MORE, { ...base, color, level: Math.round(level) })
 }
 
+// Day of week, day (whole pre-spaced images 1-31) and month, at fixed spots
+function dateGroup(sets, pos, show_level) {
+  hmUI.createWidget(hmUI.widget.IMG_WEEK, {
+    x: pos.week.x,
+    y: pos.week.y,
+    week_en: words(sets.week, 7),
+    week_tc: words(sets.week, 7),
+    week_sc: words(sets.week, 7),
+    show_level
+  })
+  hmUI.createWidget(hmUI.widget.IMG_DATE, {
+    day_startX: pos.day.x,
+    day_startY: pos.day.y,
+    day_is_character: true,
+    day_en_array: words(sets.day, 31),
+    day_sc_array: words(sets.day, 31),
+    day_tc_array: words(sets.day, 31),
+    show_level
+  })
+  hmUI.createWidget(hmUI.widget.IMG_DATE, {
+    month_startX: pos.month.x,
+    month_startY: pos.month.y,
+    month_is_character: true,
+    month_en_array: words(sets.month, 12),
+    month_sc_array: words(sets.month, 12),
+    month_tc_array: words(sets.month, 12),
+    show_level
+  })
+}
+
 WatchFace({
   init_view() {
     hmUI.createWidget(hmUI.widget.FILL_RECT, { x: 0, y: 0, w: 390, h: 450, color: 0x000000 })
 
     this.buildActivity()
+    this.buildStatus()
     this.buildBattery()
     hline(140)
     this.buildTime()
-    this.buildDateWeather()
-    hline(296)
+    this.buildDate()
+    this.buildWeather()
+    hline(322)
     this.buildHealthTiles()
-    hline(378)
+    hline(372)
     this.buildEnergyStress()
     this.buildAod()
 
@@ -117,17 +149,36 @@ WatchFace({
     vline(226, 30, 98)
   },
 
+  // ---- top right: status icons, each drawn only while its state is active ----
+  buildStatus() {
+    const icons = [
+      [hmUI.system_status.DISCONNECT, 'bt_off'],
+      [hmUI.system_status.DISTURB, 'dnd'],
+      [hmUI.system_status.CLOCK, 'alarm'],
+      [hmUI.system_status.LOCK, 'lock']
+    ]
+    icons.forEach(([type, name], i) => {
+      hmUI.createWidget(hmUI.widget.IMG_STATUS, {
+        x: 244 + Math.round(i * (118 - 24) / 3),
+        y: 30,
+        type,
+        src: `icon/${name}.png`,
+        show_level: NORMAL
+      })
+    })
+  },
+
   // ---- top right: battery ----
   buildBattery() {
-    img(240, 42, 'icon/battery.png')
+    img(244, 65, 'icon/battery.png')
     value('batt', {
-      x: 276,
-      y: 57 - Math.round(M.batt.h / 2),
+      x: 282,
+      y: 80 - Math.round(M.batt.h / 2),
       w: 3 * M.batt.digit_w + M.batt.pct,
       type: hmUI.data_type.BATTERY,
       ...units('font/batt/pct.png')
     })
-    this.batteryBar = img(240, 92, barSrc('battery', 0))
+    this.batteryBar = img(244, 106, barSrc('battery', 0))
   },
 
   // ---- middle: time ----
@@ -151,98 +202,75 @@ WatchFace({
     })
   },
 
-  // ---- date + weather row (positions computed by gen_assets.py) ----
-  buildDateWeather() {
+  // ---- middle: date (positions computed by gen_assets.py) ----
+  buildDate() {
     const R = M.dateRow
-    hmUI.createWidget(hmUI.widget.IMG_WEEK, {
-      x: R.week.x,
-      y: R.week.y,
-      week_en: words('week', 7),
-      week_tc: words('week', 7),
-      week_sc: words('week', 7),
-      show_level: NORMAL
-    })
-    // Days are whole pre-spaced images (1-31) rather than two digits
-    hmUI.createWidget(hmUI.widget.IMG_DATE, {
-      day_startX: R.day.x,
-      day_startY: R.day.y,
-      day_is_character: true,
-      day_en_array: words('day', 31),
-      day_sc_array: words('day', 31),
-      day_tc_array: words('day', 31),
-      show_level: NORMAL
-    })
-    hmUI.createWidget(hmUI.widget.IMG_DATE, {
-      month_startX: R.month.x,
-      month_startY: R.month.y,
-      month_is_character: true,
-      month_en_array: words('month', 12),
-      month_sc_array: words('month', 12),
-      month_tc_array: words('month', 12),
-      show_level: NORMAL
-    })
-
-    const temp = {
-      negative_image: 'font/row/minus.png',
-      invalid_image: 'font/row/invalid.png',
-      ...units('font/row/deg.png')
-    }
-    img(R.tempIcon.x, R.tempIcon.y, 'icon/temp.png')
-    value('row', { ...R.temp, type: hmUI.data_type.WEATHER_CURRENT, ...temp })
-    img(R.highIcon.x, R.highIcon.y, 'icon/high.png')
-    value('row', { ...R.high, type: hmUI.data_type.WEATHER_HIGH, ...temp })
-    img(R.lowIcon.x, R.lowIcon.y, 'icon/low.png')
-    value('row', { ...R.low, type: hmUI.data_type.WEATHER_LOW, ...temp })
-    img(R.humIcon.x, R.humIcon.y, 'icon/humidity.png')
-    value('row', {
-      ...R.hum,
-      type: hmUI.data_type.HUMIDITY,
-      invalid_image: 'font/row/invalid.png',
-      ...units('font/row/pct.png')
-    })
-
-    const T = R.weatherTap
-    tap(T.x, T.y, T.w, T.h, 'weather', SYSTEM_APP_WEATHER)
+    dateGroup({ week: 'week', day: 'day', month: 'month' }, R, NORMAL)
   },
 
-  // ---- health tiles: HR, SpO2, sleep ----
+  // ---- middle: weather, five equal columns ----
+  buildWeather() {
+    const R = M.weatherRow
+    const temp = {
+      negative_image: 'font/wx/minus.png',
+      invalid_image: 'font/wx/invalid.png',
+      ...units('font/wx/deg.png')
+    }
+    const fields = [
+      ['temp', { type: hmUI.data_type.WEATHER_CURRENT, ...temp }],
+      ['high', { type: hmUI.data_type.WEATHER_HIGH, ...temp }],
+      ['low', { type: hmUI.data_type.WEATHER_LOW, ...temp }],
+      ['hum', { type: hmUI.data_type.HUMIDITY, invalid_image: 'font/wx/invalid.png', ...units('font/wx/pct.png') }],
+      ['uv', { type: hmUI.data_type.UVI, invalid_image: 'font/wx/invalid.png' }]
+    ]
+    fields.forEach(([key, opts]) => {
+      const icon = R[`${key}Icon`]
+      img(icon.x, icon.y, icon.src)
+      value('wx', { ...R[key], ...opts })
+    })
+    tap(R.tap.x, R.tap.y, R.tap.w, R.tap.h, 'weather', SYSTEM_APP_WEATHER)
+  },
+
+  // ---- health tiles: HR, SpO2, sleep; icon beside value ----
   buildHealthTiles() {
     const tiles = [
-      { icon: 'hr', type: hmUI.data_type.HEART, app: SYSTEM_APP_HR },
-      { icon: 'spo2', type: hmUI.data_type.SPO2, app: SYSTEM_APP_SPO2, unit: 'font/tile/pct.png' },
+      { key: 'hr', type: hmUI.data_type.HEART, app: SYSTEM_APP_HR },
+      { key: 'spo2', type: hmUI.data_type.SPO2, app: SYSTEM_APP_SPO2, unit: 'font/tile/pct.png' },
       // SLEEP is HH:MM; the dot image doubles as the colon separator
-      { icon: 'sleep', type: hmUI.data_type.SLEEP, app: SYSTEM_APP_SLEEP, dot: 'font/tile/colon.png' }
+      { key: 'sleep', type: hmUI.data_type.SLEEP, app: SYSTEM_APP_SLEEP, dot: 'font/tile/colon.png' }
     ]
     tiles.forEach((t, i) => {
-      const x = 24 + i * 114
-      img(x + 42, 304, `icon/${t.icon}.png`)
+      const L = M.tiles[t.key]
+      img(L.iconX, L.iconY, `icon/${t.key}.png`)
       value('tile', {
-        x,
-        y: 340,
-        w: 114,
-        align_h: hmUI.align.CENTER_H,
+        x: L.x,
+        y: L.y,
+        w: L.col + 114 - L.x,
         type: t.type,
         invalid_image: 'font/tile/invalid.png',
         ...(t.unit ? units(t.unit) : {}),
         ...(t.dot ? { dot_image: t.dot } : {})
       })
-      tap(x, 304, 114, 68, 'tile', t.app)
-      if (i) vline(x, 308, 60)
+      tap(L.col, 328, 114, 36, 'tile', t.app)
+      if (i) vline(L.col, 332, 28)
     })
   },
 
   // ---- bottom: HybridCharge + stress, each with a bar ----
   buildEnergyStress() {
-    const valueY = 406 - Math.round(M.bot.h / 2)
+    const cy = 400
+    const valueY = cy - Math.round(M.bot.h / 2)
+    const iconY = cy - 13
+    const barY = cy - 4
     const cols = [36, 204]
 
-    img(cols[0], 393, 'icon/hybrid.png')
+    img(cols[0], iconY, 'icon/hybrid.png')
     const hybridType = findDataType(/HYBRID|BIO_?CHARGE/i)
     if (hybridType !== undefined) {
       value('bot', { x: cols[0] + 32, y: valueY, w: 46, type: hybridType, invalid_image: 'font/bot/invalid.png' })
       hmUI.createWidget(hmUI.widget.IMG_LEVEL, {
         x: cols[0] + 82,
-        y: 402,
+        y: barY,
         image_array: Array.from({ length: BAR_STEPS + 1 }, (_, i) => `bar/hybrid/${i}.png`),
         image_length: BAR_STEPS + 1,
         type: hybridType,
@@ -251,10 +279,10 @@ WatchFace({
     } else {
       // Firmware without HybridCharge: show "--" and an empty bar
       img(cols[0] + 32, valueY, 'font/bot/invalid.png')
-      img(cols[0] + 82, 402, barSrc('hybrid', 0))
+      img(cols[0] + 82, barY, barSrc('hybrid', 0))
     }
 
-    img(cols[1], 393, 'icon/stress.png')
+    img(cols[1], iconY, 'icon/stress.png')
     value('bot', {
       x: cols[1] + 32,
       y: valueY,
@@ -262,8 +290,8 @@ WatchFace({
       type: hmUI.data_type.STRESS,
       invalid_image: 'font/bot/invalid.png'
     })
-    this.stressBar = img(cols[1] + 82, 402, barSrc('stress', 0))
-    tap(cols[1], 386, 150, 40, 'stress', SYSTEM_APP_PRESSURE)
+    this.stressBar = img(cols[1] + 82, barY, barSrc('stress', 0))
+    tap(cols[1], cy - 20, 150, 40, 'stress', SYSTEM_APP_PRESSURE)
   },
 
   // ---- always-on display: dim time, date, battery ----
@@ -286,36 +314,17 @@ WatchFace({
       show_level: AOD
     })
 
-    const dateW = M.aod_week.w + 8 + 2 * M.aod_date.digit_w + 8 + M.aod_month.w
+    const dateW = M.aod_week.w + 8 + M.aod_day.w + 8 + M.aod_month.w
     const dx = Math.round((390 - dateW) / 2)
-    hmUI.createWidget(hmUI.widget.IMG_WEEK, {
-      x: dx,
-      y: 262,
-      week_en: words('aod_week', 7),
-      week_tc: words('aod_week', 7),
-      week_sc: words('aod_week', 7),
-      show_level: AOD
-    })
-    hmUI.createWidget(hmUI.widget.IMG_DATE, {
-      day_startX: dx + M.aod_week.w + 8,
-      day_startY: 262,
-      day_zero: 1,
-      day_space: 0,
-      day_align: hmUI.align.LEFT,
-      day_en_array: digits('aod_date'),
-      day_sc_array: digits('aod_date'),
-      day_tc_array: digits('aod_date'),
-      show_level: AOD
-    })
-    hmUI.createWidget(hmUI.widget.IMG_DATE, {
-      month_startX: dx + M.aod_week.w + 8 + 2 * M.aod_date.digit_w + 8,
-      month_startY: 262,
-      month_is_character: true,
-      month_en_array: words('aod_month', 12),
-      month_sc_array: words('aod_month', 12),
-      month_tc_array: words('aod_month', 12),
-      show_level: AOD
-    })
+    dateGroup(
+      { week: 'aod_week', day: 'aod_day', month: 'aod_month' },
+      {
+        week: { x: dx, y: 258 },
+        day: { x: dx + M.aod_week.w + 8, y: 258 },
+        month: { x: dx + M.aod_week.w + 8 + M.aod_day.w + 8, y: 258 }
+      },
+      AOD
+    )
 
     const battW = 46 + 8 + 2 * M.aod_batt.digit_w + M.aod_batt.pct
     const bx = Math.round((390 - battW) / 2)

@@ -43,8 +43,11 @@ TRACK = '#26262c'
 
 SS = 4  # supersampling factor for icons and shapes
 
-# Date/weather row: spans x 28..362, vertically centred on y 276
-ROW_X0, ROW_X1, ROW_CY = 28, 362, 276
+# Middle rows: date centred on y 268, weather (five equal columns over
+# x 24..366) centred on y 301. Health tiles centred on y 346.
+DATE_CY = 268
+WEATHER_X0, WEATHER_X1, WEATHER_CY = 24, 366, 301
+TILE_X0, TILE_W, TILE_CY = 24, 114, 346
 
 metrics = {}
 
@@ -198,48 +201,63 @@ def app_icon(size=124):
 
 # ---------- date/weather row layout ----------
 
+def cap_mid(y, m):
+    """y of the middle of the digits for a set drawn at y (icons centre on it)."""
+    return y + m['h'] - 1 - m['cap'] / 2
+
+
 def date_row():
-    """Lays the row out like the wireframe's flex `space-between`: four groups
-    (date, temp, high/low, humidity) with equal gaps, sized for typical
-    two-digit values. Every set in the row shares one height, so one y gives
-    one baseline; icons centre on the middle of the digits, not the box."""
-    r, wk, mo, day = metrics['row'], metrics['week'], metrics['month'], metrics['day']
+    """Day, date and month centred as one group. All three share one height."""
+    wk, mo, day = metrics['week'], metrics['month'], metrics['day']
+    total = wk['w'] + 6 + day['w'] + 6 + mo['w']
+    x = round((390 - total) / 2)
+    y = round(DATE_CY - wk['h'] / 2)
+    metrics['dateRow'] = {
+        'week': {'x': x, 'y': y},
+        'day': {'x': x + wk['w'] + 6, 'y': y},
+        'month': {'x': x + wk['w'] + 6 + day['w'] + 6, 'y': y},
+    }
+
+
+def weather_row():
+    """Five equal columns: temp, high, low, humidity, UV. Each icon+value pair
+    is centred in its column for a typical value; values are left-aligned
+    after their icon so longer ones grow to the right."""
+    r = metrics['wx']
     dw, avg = r['digit_w'], r['avg_w']
-    ICON, TRI, GAP_IN = 20, 11, 8
-    nominal = 2 * avg + r['deg']  # e.g. "24°"
-    groups = {
-        'date': wk['w'] + 3 + day['w'] + 3 + mo['w'],
-        'temp': ICON + 2 + nominal,
-        'hilo': 2 * (TRI + 2 + nominal) + GAP_IN,
-        'hum': ICON + 2 + 2 * avg + r['pct'],
-    }
-    gap = (ROW_X1 - ROW_X0 - sum(groups.values())) / 3
-    assert gap >= 6, f'date row does not fit (gap {gap:.1f}px)'
-    x, pos = ROW_X0, {}
-    for k, w in groups.items():
-        pos[k] = round(x)
-        x += w + gap
-    y = round(ROW_CY - r['h'] / 2)
-    cap_mid = y + r['h'] - 1 - r['cap'] / 2
-    icon_y, tri_y = round(cap_mid - ICON / 2), round(cap_mid - TRI / 2)
-    low_icon_x = round(pos['hilo'] + TRI + 2 + nominal + GAP_IN)
-    lay = {
-        'week': {'x': pos['date'], 'y': y},
-        'day': {'x': pos['date'] + wk['w'] + 3, 'y': y},
-        'month': {'x': pos['date'] + wk['w'] + 3 + day['w'] + 3, 'y': y},
-        'tempIcon': {'x': pos['temp'], 'y': icon_y},
-        'temp': {'x': pos['temp'] + ICON + 2, 'y': y, 'w': r['minus'] + 2 * dw + r['deg']},
-        'highIcon': {'x': pos['hilo'], 'y': tri_y},
-        'high': {'x': pos['hilo'] + TRI + 2, 'y': y, 'w': 2 * dw + r['deg']},
-        'lowIcon': {'x': low_icon_x, 'y': tri_y},
-        'low': {'x': low_icon_x + TRI + 2, 'y': y, 'w': 2 * dw + r['deg']},
-        'humIcon': {'x': pos['hum'], 'y': icon_y},
-        'hum': {'x': pos['hum'] + ICON + 2, 'y': y, 'w': 3 * dw + r['pct']},
-        'weatherTap': {'x': pos['temp'] - 6, 'y': 260, 'w': ROW_X1 + 6 - (pos['temp'] - 6), 'h': 32},
-        'gap': round(gap, 1),
-    }
-    metrics['dateRow'] = lay
-    return lay
+    y = round(WEATHER_CY - r['h'] / 2)
+    mid = cap_mid(y, r)
+    col_w = (WEATHER_X1 - WEATHER_X0) / 5
+    items = [  # key, icon, icon size, gap, typical value width, slot width
+        ('temp', 'temp', 20, 2, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('high', 'high', 11, 3, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('low', 'low', 11, 3, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('hum', 'humidity', 20, 2, 2 * avg + r['pct'], 3 * dw + r['pct']),
+        ('uv', 'uv', 20, 3, avg, 2 * dw),
+    ]
+    lay = {}
+    for i, (key, icon_name, size, gap, typical, slot) in enumerate(items):
+        x = round(WEATHER_X0 + col_w * i + (col_w - (size + gap + typical)) / 2)
+        lay[key + 'Icon'] = {'x': x, 'y': round(mid - size / 2), 'src': f'icon/{icon_name}.png'}
+        lay[key] = {'x': x + size + gap, 'y': y, 'w': slot}
+    lay['tap'] = {'x': WEATHER_X0, 'y': WEATHER_CY - 15, 'w': WEATHER_X1 - WEATHER_X0, 'h': 30}
+    metrics['weatherRow'] = lay
+
+
+def tiles_row():
+    """Three tiles, icon beside value, the pair centred for a typical value."""
+    t = metrics['tile']
+    avg = t['avg_w']
+    y = round(TILE_CY - t['h'] / 2)
+    mid = cap_mid(y, t)
+    ICON, GAP = 24, 8
+    typical = {'hr': 2 * avg, 'spo2': 2 * avg + t['pct'], 'sleep': 4 * avg + t['colon']}
+    lay = {}
+    for i, key in enumerate(('hr', 'spo2', 'sleep')):
+        col = TILE_X0 + TILE_W * i
+        x = round(col + (TILE_W - (ICON + GAP + typical[key])) / 2)
+        lay[key] = {'col': col, 'iconX': x, 'iconY': round(mid - ICON / 2), 'x': x + ICON + GAP, 'y': y}
+    metrics['tiles'] = lay
 
 
 def shared_top(size, probe='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789%°'):
@@ -258,24 +276,25 @@ def main():
     os.makedirs(OUT, exist_ok=True)
 
     # Normal mode
-    font_set('time', 146, WHITE, ('colon',), pad_x=2)
+    font_set('time', 132, WHITE, ('colon',), pad_x=2)
     font_set('stat', 24, WHITE, ('dot', 'slash'))
-    font_set('batt', 44, WHITE, ('pct',))
-    font_set('tile', 32, WHITE, ('pct', 'colon', 'invalid'))
+    font_set('batt', 40, WHITE, ('pct',))
+    font_set('tile', 28, WHITE, ('pct', 'colon', 'invalid'), proportional=True)
     font_set('bot', 30, WHITE, ('invalid',))
-    # Date/weather row: one size, one shared baseline
-    row_top = shared_top(22)
-    font_set('row', 22, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, top=row_top, proportional=True)
-    word_set('week', WEEK, 22, ORANGE, align='right', top=row_top)
-    word_set('month', MONTHS, 22, WHITE, top=row_top)
-    day_set('day', 22, WHITE, top=row_top)
+    # Date row: day/date/month share one height so they share a baseline
+    date_top = shared_top(24)
+    word_set('week', WEEK, 24, ORANGE, align='right', top=date_top)
+    word_set('month', MONTHS, 24, WHITE, top=date_top)
+    day_set('day', 24, WHITE, top=date_top)
+    font_set('wx', 22, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, proportional=True)
 
     # Always-on mode (dim grey)
-    font_set('aod', 146, AOD_GRAY, ('colon',), pad_x=2)
-    font_set('aod_date', 30, AOD_GRAY, weight='Bold')
+    font_set('aod', 132, AOD_GRAY, ('colon',), pad_x=2)
+    aod_top = shared_top(30)
+    word_set('aod_week', WEEK, 30, AOD_GRAY, align='right', top=aod_top)
+    word_set('aod_month', MONTHS, 30, AOD_GRAY, top=aod_top)
+    day_set('aod_day', 30, AOD_GRAY, top=aod_top)
     font_set('aod_batt', 24, AOD_GRAY, ('pct',))
-    word_set('aod_week', WEEK, 30, AOD_GRAY, align='right')
-    word_set('aod_month', MONTHS, 30, AOD_GRAY)
 
     icon('steps', 'footprint', 22, STEPS)
     icon('cal', 'local_fire_department', 22, CAL)
@@ -286,22 +305,31 @@ def main():
     icon('humidity', 'humidity_percentage', 20, HUMID)
     triangle('high', 11, '#ff6b5a', up=True)
     triangle('low', 11, '#4da3ff', up=False)
-    icon('hr', 'ecg_heart', 30, HR)
-    icon('spo2', 'spo2', 30, SPO2)
-    icon('sleep', 'bedtime', 30, SLEEP)
+    icon('hr', 'ecg_heart', 24, HR)
+    icon('spo2', 'spo2', 24, SPO2)
+    icon('sleep', 'bedtime', 24, SLEEP)
     icon('hybrid', 'electric_bolt', 26, HYBRID)
     icon('stress', 'psychology', 26, STRESS)
+    # Status icons: each shown only while its state is active
+    icon('bt_off', 'bluetooth_disabled', 24, BAD)
+    icon('dnd', 'do_not_disturb_on', 24, '#a78bfa')
+    icon('alarm', 'alarm', 24, '#ffc94d')
+    icon('lock', 'lock', 24, '#8c8c96')
+    icon('uv', 'sunny', 20, '#ffd84d')
 
-    bar_set('battery', 118, 14, lambda i: BAD if i <= 2 else (WARN if i <= 4 else GOOD))
+    bar_set('battery', 118, 12, lambda i: BAD if i <= 2 else (WARN if i <= 4 else GOOD))
     bar_set('hybrid', 68, 8, lambda i: HYBRID)
     bar_set('stress', 68, 8, lambda i: STRESS)
     bar_set('aod_battery', 46, 12, lambda i: '#4a4a50')
 
-    lay = date_row()
+    date_row()
+    weather_row()
+    tiles_row()
+    wt = metrics['weatherRow']['tap']
     press_overlay('activity', 198, 102)
-    press_overlay('tile', 114, 68, radius=12)
+    press_overlay('tile', TILE_W, 36, radius=12)
     press_overlay('stress', 150, 40, radius=12)
-    press_overlay('weather', lay['weatherTap']['w'], lay['weatherTap']['h'], radius=10)
+    press_overlay('weather', wt['w'], wt['h'], radius=10)
     app_icon()
 
     write_metrics_js()

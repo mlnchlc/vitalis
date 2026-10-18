@@ -22,9 +22,10 @@ SS = 4
 SAMPLE = {
     'STEP': '7486', 'CAL': '412', 'DISTANCE': '5.21', 'BATTERY': '62',
     'WEATHER_CURRENT': '24', 'WEATHER_HIGH': '31', 'WEATHER_LOW': '20', 'HUMIDITY': '79',
-    'HEART': '74', 'SPO2': '98', 'SLEEP': '07.32', 'STRESS': '32', 'HYBRID_CHARGE': '72',
+    'HEART': '74', 'SPO2': '98', 'SLEEP': '07.32', 'STRESS': '32', 'HYBRID_CHARGE': '72', 'UVI': '3',
 }
 TIME = ('10', '08')
+STATUS_ON = True  # draw every status icon, as if all were active
 WEEKDAY = 5  # SAT (Monday first)
 DAY, MONTH = '18', 9  # OCT
 
@@ -119,7 +120,7 @@ def render(widgets, level):
         t = w['widget']
         if t == 'FILL_RECT':
             d.rectangle((w['x'], w['y'], w['x'] + w['w'] - 1, w['y'] + w['h'] - 1), fill=color(w['color']))
-        elif t == 'IMG':
+        elif t == 'IMG' or (t == 'IMG_STATUS' and STATUS_ON):
             canvas.alpha_composite(load(w['src']), (w['x'], w['y']))
         elif t == 'TEXT_IMG':
             draw_text_img(canvas, w)
