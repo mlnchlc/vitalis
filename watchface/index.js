@@ -7,18 +7,19 @@ import {
   SYSTEM_APP_SPO2,
   SYSTEM_APP_SLEEP,
   SYSTEM_APP_PRESSURE,
+  SYSTEM_APP_PAI,
   SYSTEM_APP_WEATHER
 } from '@zos/router'
 import * as zosUI from '@zos/ui'
 import { getScene, SCENE_AOD } from '@zos/app'
 import { M } from './metrics'
 
-// Layout follows the approved wireframe: 390 x 450, all coordinates in px.
-// Images live in assets/bip6 and are produced by tools/gen_assets.py.
+// Layout follows the approved "cohesive" wireframe: 390 x 450, 24 px margins,
+// 4 px grid. Images live in assets/bip6 and are produced by tools/gen_assets.py,
+// which also computes the date, weather and vitals positions in metrics.js.
 
-// Watchface widgets are documented on the global hmUI; API 2+ apps are told to
-// import @zos/ui instead. Use the global when the runtime provides it, else
-// the module, with fallbacks for the watchface-only constants.
+// The Bip 6 has no global hmUI; widgets come from @zos/ui. Keep the global as
+// a fallback for runtimes that still provide it.
 const hmUI = typeof globalThis.hmUI === 'object' && globalThis.hmUI !== null ? globalThis.hmUI : zosUI
 // show_level marks which widgets draw in normal and always-on mode (needs
 // "lockscreen": 1 in app.json). Guard for runtimes without it; the face also
@@ -30,6 +31,15 @@ const LINE = 0x2a2a30
 const RING_TRACK = 0x2a2a30
 const BAR_STEPS = 10
 
+// Top band (y 28-128): rings + stats on the left, status + battery on the right
+const STAT_X = 120
+const STAT_ROW_Y = (i) => 28 + i * 26 // 22 px rows; status icons align with row 0
+const RIGHT_X = 244
+const RIGHT_W = 118
+const BATTERY_CY = 78 // middle of the rings
+const DIVIDERS = [136, 324, 372]
+const TIME_Y = 144
+
 const digits = (set) => Array.from({ length: 10 }, (_, i) => `font/${set}/${i}.png`)
 const words = (set, n) => Array.from({ length: n }, (_, i) => `date/${set}_${i}.png`)
 const units = (src) => ({ unit_en: src, unit_sc: src, unit_tc: src, imperial_unit_en: src, imperial_unit_sc: src, imperial_unit_tc: src })
@@ -38,11 +48,14 @@ const pctOf = (cur, target) => (target > 0 ? Math.min(100, (cur * 100) / target)
 const pad2 = (n) => String(n).padStart(2, '0')
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
-// Thresholds agreed in the design
+// Thresholds agreed in the design. One status scale everywhere:
+// blue relaxed, green good, amber caution, red alert.
 const SPO2_LOW = 92 // % - below this SpO2 turns red
 const SLEEP_SHORT = 6 * 60 // minutes - under this sleep turns amber
 const HR_ELEVATED = 0.6 // fraction of max HR (220 - age) where HR turns orange
 const HR_HIGH = 0.8 // ... and red
+const BATTERY_LOW = 40 // % - battery turns amber at or below this
+const BATTERY_CRITICAL = 20 // ... and red
 const stressZone = (v) => (v < 40 ? 'relaxed' : v < 60 ? 'normal' : v < 80 ? 'medium' : 'high')
 
 // HybridCharge (Amazfit's 2026 rename of BioCharge) isn't in the published
@@ -118,11 +131,12 @@ function ring(cx, cy, radius, color) {
 // One value drawn in one of several colours: a TEXT_IMG per colour set at
 // the same spot, only the active one visible. show(null) shows "--".
 // (An empty-text TEXT_IMG still draws "0" on the watch, so inactive copies
-// are hidden rather than blanked.)
-function tintedValue(sets, optsFor, invalidSrc, x, y) {
+// are hidden rather than blanked. TEXT_IMG also appends its unit image by
+// itself, so text never includes the unit.)
+function tintedValue(sets, optsFor, invalidSrc, x, y, w) {
   const widgets = {}
   sets.forEach((set) => {
-    widgets[set] = value(set, { x, y, w: 80, ...optsFor(set), text: '0' })
+    widgets[set] = value(set, { x, y, w, ...optsFor(set), text: '0' })
     widgets[set].setProperty(hmUI.prop.VISIBLE, false)
   })
   const invalid = img(x, y, invalidSrc)
@@ -168,6 +182,26 @@ function dateGroup(sets, pos, show_level) {
   })
 }
 
+function bigTime(set, show_level) {
+  const width = 4 * M[set].digit_w + M[set].colon
+  create(hmUI.widget.IMG_TIME, {
+    hour_zero: 1,
+    hour_startX: Math.round((390 - width) / 2),
+    hour_startY: TIME_Y,
+    hour_array: digits(set),
+    hour_space: 0,
+    hour_unit_sc: `font/${set}/colon.png`,
+    hour_unit_tc: `font/${set}/colon.png`,
+    hour_unit_en: `font/${set}/colon.png`,
+    hour_align: hmUI.align.LEFT,
+    minute_zero: 1,
+    minute_array: digits(set),
+    minute_space: 0,
+    minute_follow: 1,
+    show_level
+  })
+}
+
 WatchFace({
   init_view() {
     this.errors = []
@@ -184,12 +218,11 @@ WatchFace({
     this.safely('activity', () => this.buildActivity())
     this.safely('status', () => this.buildStatus())
     this.safely('battery', () => this.buildBattery())
-    this.safely('lines', () => [140, 322, 372].forEach(hline))
-    this.safely('time', () => this.buildTime())
+    this.safely('lines', () => DIVIDERS.forEach(hline))
+    this.safely('time', () => bigTime('time', NORMAL))
     this.safely('date', () => this.buildDate())
     this.safely('weather', () => this.buildWeather())
-    this.safely('tiles', () => this.buildHealthTiles())
-    this.safely('bottom', () => this.buildEnergyStress())
+    this.safely('vitals', () => this.buildVitals())
     // With show_level available, the always-on layout rides along hidden
     if (SHOW_LEVEL) this.safely('aod', () => this.buildAod())
     this.safely('sensors', () => this.bindSensors())
@@ -234,18 +267,17 @@ WatchFace({
     this.setCalRing = ring(64, 78, 34, 0xff5a36)
     this.setStandRing = ring(64, 78, 23, 0xb6f23a)
 
-    const rowY = (i) => 26 + i * 26
-    const valY = (i) => rowY(i) + Math.round((23 - M.stat.h) / 2)
-    ;['steps', 'cal', 'stand', 'dist'].forEach((name, i) => img(120, rowY(i), `icon/${name}.png`))
-
-    value('stat', { x: 148, y: valY(0), w: 72, type: hmUI.data_type.STEP })
-    value('stat', { x: 148, y: valY(1), w: 72, type: hmUI.data_type.CAL })
+    const valY = (i) => STAT_ROW_Y(i) + Math.round((22 - M.stat.h) / 2)
+    ;['steps', 'cal', 'stand', 'dist'].forEach((name, i) => img(STAT_X, STAT_ROW_Y(i) + 1, `icon/${name}.png`))
+    const vx = STAT_X + 20 + 6
+    value('stat', { x: vx, y: valY(0), w: 72, type: hmUI.data_type.STEP })
+    value('stat', { x: vx, y: valY(1), w: 72, type: hmUI.data_type.CAL })
     // Stand shows "now/goal": the dot image is a slash, fed as "8.12".
-    this.standText = value('stat', { x: 148, y: valY(2), w: 72, dot_image: 'font/stat/slash.png', text: '0' })
-    value('stat', { x: 148, y: valY(3), w: 72, type: hmUI.data_type.DISTANCE, dot_image: 'font/stat/dot.png' })
+    this.standText = value('stat', { x: vx, y: valY(2), w: 72, dot_image: 'font/stat/slash.png', text: '0' })
+    value('stat', { x: vx, y: valY(3), w: 72, type: hmUI.data_type.DISTANCE, dot_image: 'font/stat/dot.png' })
 
     tap(14, 26, 198, 102, 'activity', SYSTEM_APP_STATUS)
-    vline(226, 30, 98)
+    vline(226, 28, 100)
   },
 
   // ---- top right: status icons, each drawn only while its state is active ----
@@ -259,8 +291,8 @@ WatchFace({
     ]
     icons.forEach(([type, name], i) => {
       create(hmUI.widget.IMG_STATUS, {
-        x: 244 + Math.round(i * (118 - 24) / 3),
-        y: 30,
+        x: RIGHT_X + Math.round((i * (RIGHT_W - 24)) / 3),
+        y: STAT_ROW_Y(0) - 1,
         type,
         src: `icon/${name}.png`,
         show_level: NORMAL
@@ -268,38 +300,18 @@ WatchFace({
     })
   },
 
-  // ---- top right: battery ----
+  // ---- top right: battery, % coloured by charge (no bar) ----
   buildBattery() {
-    img(244, 65, 'icon/battery.png')
-    value('batt', {
-      x: 282,
-      y: 80 - Math.round(M.batt.h / 2),
-      w: 3 * M.batt.digit_w + M.batt.pct,
-      type: hmUI.data_type.BATTERY,
-      ...units('font/batt/pct.png')
-    })
-    this.batteryBar = img(244, 106, barSrc('battery', 0))
-  },
-
-  // ---- middle: time ----
-  buildTime() {
-    const width = 4 * M.time.digit_w + M.time.colon
-    create(hmUI.widget.IMG_TIME, {
-      hour_zero: 1,
-      hour_startX: Math.round((390 - width) / 2),
-      hour_startY: 150,
-      hour_array: digits('time'),
-      hour_space: 0,
-      hour_unit_sc: 'font/time/colon.png',
-      hour_unit_tc: 'font/time/colon.png',
-      hour_unit_en: 'font/time/colon.png',
-      hour_align: hmUI.align.LEFT,
-      minute_zero: 1,
-      minute_array: digits('time'),
-      minute_space: 0,
-      minute_follow: 1,
-      show_level: NORMAL
-    })
+    img(RIGHT_X, BATTERY_CY - 12, 'icon/battery.png')
+    const b = M.batt
+    this.showBattery = tintedValue(
+      ['batt', 'batt_amber', 'batt_red'],
+      (set) => units(`font/${set}/pct.png`),
+      'font/tile/invalid.png',
+      RIGHT_X + 24 + 6,
+      BATTERY_CY - Math.round(b.h / 2),
+      3 * b.digit_w + b.pct
+    )
   },
 
   // ---- middle: date (positions computed by gen_assets.py) ----
@@ -310,7 +322,7 @@ WatchFace({
     dateGroup({ day: 'day', month: 'month' }, R, NORMAL)
   },
 
-  // ---- middle: weather, five equal columns ----
+  // ---- middle: weather, four equal columns ----
   buildWeather() {
     const R = M.weatherRow
     const temp = {
@@ -322,8 +334,7 @@ WatchFace({
       ['temp', { type: hmUI.data_type.WEATHER_CURRENT, ...temp }],
       ['high', { type: hmUI.data_type.WEATHER_HIGH, ...temp }],
       ['low', { type: hmUI.data_type.WEATHER_LOW, ...temp }],
-      ['hum', { type: hmUI.data_type.HUMIDITY, invalid_image: 'font/wx/invalid.png', ...units('font/wx/pct.png') }],
-      ['uv', { type: hmUI.data_type.UVI, invalid_image: 'font/wx/invalid.png' }]
+      ['hum', { type: hmUI.data_type.HUMIDITY, invalid_image: 'font/wx/invalid.png', ...units('font/wx/pct.png') }]
     ]
     fields.forEach(([key, opts]) => {
       const icon = R[`${key}Icon`]
@@ -333,14 +344,20 @@ WatchFace({
     tap(R.tap.x, R.tap.y, R.tap.w, R.tap.h, 'weather', SYSTEM_APP_WEATHER)
   },
 
-  // ---- health tiles: HR, SpO2, sleep; icon beside value, colour by state ----
-  buildHealthTiles() {
-    const unitsIn = (set) => units(`font/${set}/pct.png`)
-    const hr = M.tiles.hr
+  // ---- vitals: 2 x 4 cells, icon beside value ----
+  //   HR | SpO2 | HRV | Stress
+  //   HybridCharge | Sleep | PAI | UV
+  buildVitals() {
+    const C = M.vitals.cells
+    const colW = M.vitals.colW
+    const invalid = 'font/tile/invalid.png'
+    const at = (key) => [C[key].x, C[key].y, C[key].w]
+
+    // Heart rate: animated icon, value coloured by HR zone
     const hb = M.heartbeat
     this.heartAnim = create(hmUI.widget.IMG_ANIM, {
-      x: hr.iconX - hb.pad,
-      y: hr.iconY - hb.pad,
+      x: C.hr.iconX - hb.pad,
+      y: C.hr.iconY - hb.pad,
       anim_path: 'anim/hr',
       anim_prefix: 'hr',
       anim_ext: 'png',
@@ -351,96 +368,50 @@ WatchFace({
       default_frame_index: 0,
       show_level: NORMAL
     })
-    this.showHr = tintedValue(['tile', 'tile_orange', 'tile_red'], () => ({}), 'font/tile/invalid.png', hr.x, hr.y)
+    this.showHr = tintedValue(['tile', 'tile_orange', 'tile_red'], () => ({}), invalid, ...at('hr'))
 
-    const spo2 = M.tiles.spo2
-    img(spo2.iconX, spo2.iconY, 'icon/spo2.png')
-    this.showSpo2 = tintedValue(['tile', 'tile_red'], unitsIn, 'font/tile/invalid.png', spo2.x, spo2.y)
+    img(C.spo2.iconX, C.spo2.iconY, 'icon/spo2.png')
+    this.showSpo2 = tintedValue(['tile', 'tile_red'], (set) => units(`font/${set}/pct.png`), invalid, ...at('spo2'))
 
-    // Sleep is "HH.MM" with the dot image drawn as a colon
-    const sleep = M.tiles.sleep
-    img(sleep.iconX, sleep.iconY, 'icon/sleep.png')
-    this.showSleep = tintedValue(
-      ['tile', 'tile_amber'],
-      (set) => ({ dot_image: `font/${set}/colon.png` }),
-      'font/tile/invalid.png',
-      sleep.x,
-      sleep.y
-    )
+    img(C.hrv.iconX, C.hrv.iconY, 'icon/hrv.png')
+    value('tile', { x: C.hrv.x, y: C.hrv.y, w: C.hrv.w, type: hmUI.data_type.HRV, invalid_image: invalid })
 
-    const apps = { hr: SYSTEM_APP_HR, spo2: SYSTEM_APP_SPO2, sleep: SYSTEM_APP_SLEEP }
-    Object.keys(apps).forEach((key, i) => {
-      const col = M.tiles[key].col
-      tap(col, 328, 114, 36, 'tile', apps[key])
-      if (i) vline(col, 332, 28)
-    })
-  },
+    // Stress: icon and value take the zone colour
+    this.stressIcon = img(C.stress.iconX, C.stress.iconY, 'icon/stress.png')
+    const zones = ['relaxed', 'normal', 'medium', 'high']
+    this.showStress = tintedValue(zones.map((z) => `tile_${z}`), () => ({}), invalid, ...at('stress'))
 
-  // ---- bottom: HybridCharge + stress, each with a bar ----
-  buildEnergyStress() {
-    const cy = 400
-    const valueY = cy - Math.round(M.bot.h / 2)
-    const iconY = cy - 13
-    const barY = cy - 4
-    const cols = [36, 204]
-
-    img(cols[0], iconY, 'icon/hybrid.png')
+    img(C.hybrid.iconX, C.hybrid.iconY, 'icon/hybrid.png')
     const hybridType = findDataType(HYBRID_NAMES)
     if (hybridType !== undefined) {
-      value('bot', { x: cols[0] + 32, y: valueY, w: 46, type: hybridType, invalid_image: 'font/bot/invalid.png' })
-      create(hmUI.widget.IMG_LEVEL, {
-        x: cols[0] + 82,
-        y: barY,
-        image_array: Array.from({ length: BAR_STEPS + 1 }, (_, i) => `bar/hybrid/${i}.png`),
-        image_length: BAR_STEPS + 1,
-        type: hybridType,
-        show_level: NORMAL
-      })
+      value('tile', { x: C.hybrid.x, y: C.hybrid.y, w: C.hybrid.w, type: hybridType, invalid_image: invalid })
     } else {
-      // Firmware without HybridCharge: show "--" and an empty bar
-      img(cols[0] + 32, valueY, 'font/bot/invalid.png')
-      img(cols[0] + 82, barY, barSrc('hybrid', 0))
+      img(C.hybrid.x, C.hybrid.y, invalid)
     }
 
-    // Stress: icon, value and bar all take the zone colour
-    this.stressIcon = img(cols[1], iconY, 'icon/stress.png')
-    const zones = ['relaxed', 'normal', 'medium', 'high']
-    this.showStress = tintedValue(zones.map((z) => `bot_${z}`), () => ({ w: 46 }), 'font/bot/invalid.png', cols[1] + 32, valueY)
-    this.stressBar = img(cols[1] + 82, barY, barSrc('stress_relaxed', 0))
-    tap(cols[1], cy - 20, 150, 40, 'stress', SYSTEM_APP_PRESSURE)
+    // Sleep is "H.MM" with the dot image drawn as a colon
+    img(C.sleep.iconX, C.sleep.iconY, 'icon/sleep.png')
+    this.showSleep = tintedValue(['tile', 'tile_amber'], (set) => ({ dot_image: `font/${set}/colon.png` }), invalid, ...at('sleep'))
+
+    img(C.pai.iconX, C.pai.iconY, 'icon/pai.png')
+    value('tile', { x: C.pai.x, y: C.pai.y, w: C.pai.w, type: hmUI.data_type.PAI_WEEKLY, invalid_image: invalid })
+
+    img(C.uv.iconX, C.uv.iconY, 'icon/uv.png')
+    value('tile', { x: C.uv.x, y: C.uv.y, w: C.uv.w, type: hmUI.data_type.UVI, invalid_image: invalid })
+
+    const apps = { hr: SYSTEM_APP_HR, spo2: SYSTEM_APP_SPO2, stress: SYSTEM_APP_PRESSURE, sleep: SYSTEM_APP_SLEEP, pai: SYSTEM_APP_PAI }
+    Object.keys(apps).forEach((key) => tap(C[key].col, C[key].top - 2, colW, 40, 'cell', apps[key]))
+    // Column separators, shared by both rows
+    ;['spo2', 'hrv', 'stress'].forEach((key) => {
+      vline(C[key].col, C.hr.top + 6, 24)
+      vline(C[key].col, C.hybrid.top + 6, 24)
+    })
   },
 
-  // ---- always-on display: dim time, date, battery ----
+  // ---- always-on display: dim time, date, battery at the same positions ----
   buildAod() {
-    const width = 4 * M.aod.digit_w + M.aod.colon
-    create(hmUI.widget.IMG_TIME, {
-      hour_zero: 1,
-      hour_startX: Math.round((390 - width) / 2),
-      hour_startY: 150,
-      hour_array: digits('aod'),
-      hour_space: 0,
-      hour_unit_sc: 'font/aod/colon.png',
-      hour_unit_tc: 'font/aod/colon.png',
-      hour_unit_en: 'font/aod/colon.png',
-      hour_align: hmUI.align.LEFT,
-      minute_zero: 1,
-      minute_array: digits('aod'),
-      minute_space: 0,
-      minute_follow: 1,
-      show_level: AOD
-    })
-
-    const dateW = M.aod_week.w + 8 + M.aod_day.w + 8 + M.aod_month.w
-    const dx = Math.round((390 - dateW) / 2)
-    dateGroup(
-      { week: 'aod_week', day: 'aod_day', month: 'aod_month' },
-      {
-        week: { x: dx, y: 258 },
-        day: { x: dx + M.aod_week.w + 8, y: 258 },
-        month: { x: dx + M.aod_week.w + 8 + M.aod_day.w + 8, y: 258 }
-      },
-      AOD
-    )
+    bigTime('aod', AOD)
+    dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, M.dateRow, AOD)
 
     const battW = 46 + 8 + 2 * M.aod_batt.digit_w + M.aod_batt.pct
     const bx = Math.round((390 - battW) / 2)
@@ -459,7 +430,7 @@ WatchFace({
     })
   },
 
-  // ---- values that need JS: rings, stand "now/goal", bars, colour states ----
+  // ---- values that need JS: rings, stand "now/goal", colour states ----
   bindSensors() {
     this.battery = new Battery()
     this.step = new Step()
@@ -494,6 +465,13 @@ WatchFace({
     this.refresh()
   },
 
+  bindAodBattery() {
+    this.battery = new Battery()
+    this.onBattery = () => this.refreshBattery()
+    this.battery.onChange(this.onBattery)
+    this.refreshBattery()
+  },
+
   // Every wrist raise / return to the face
   refresh() {
     this.safely('sleep', () => this.sleep.updateInfo())
@@ -518,15 +496,11 @@ WatchFace({
 
   refreshBattery() {
     const level = this.battery.getCurrent()
-    if (this.batteryBar) this.batteryBar.setProperty(hmUI.prop.SRC, barSrc('battery', level))
+    if (this.showBattery) {
+      const set = level <= BATTERY_CRITICAL ? 'batt_red' : level <= BATTERY_LOW ? 'batt_amber' : 'batt'
+      this.showBattery(set, String(level))
+    }
     if (this.aodBatteryBar) this.aodBatteryBar.setProperty(hmUI.prop.SRC, barSrc('aod_battery', level))
-  },
-
-  bindAodBattery() {
-    this.battery = new Battery()
-    this.onBattery = () => this.refreshBattery()
-    this.battery.onChange(this.onBattery)
-    this.refreshBattery()
   },
 
   refreshStress() {
@@ -534,13 +508,11 @@ WatchFace({
     if (!(value > 0)) {
       this.showStress(null)
       this.stressIcon.setProperty(hmUI.prop.SRC, 'icon/stress.png')
-      this.stressBar.setProperty(hmUI.prop.SRC, barSrc('stress_relaxed', 0))
       return
     }
     const zone = stressZone(value)
-    this.showStress(`bot_${zone}`, String(value))
+    this.showStress(`tile_${zone}`, String(value))
     this.stressIcon.setProperty(hmUI.prop.SRC, `icon/stress_${zone}.png`)
-    this.stressBar.setProperty(hmUI.prop.SRC, barSrc(`stress_${zone}`, value))
   },
 
   refreshHealth() {
@@ -553,12 +525,12 @@ WatchFace({
     }
 
     const { value: spo2 } = this.bloodOxygen.getCurrent()
-    if (spo2 > 0) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', String(spo2)) // widget appends the % unit
+    if (spo2 > 0) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', String(spo2))
     else this.showSpo2(null)
 
     const { totalTime } = this.sleep.getInfo()
     if (totalTime > 0) {
-      const text = `${pad2(Math.floor(totalTime / 60))}.${pad2(totalTime % 60)}`
+      const text = `${Math.floor(totalTime / 60)}.${pad2(totalTime % 60)}`
       this.showSleep(totalTime < SLEEP_SHORT ? 'tile_amber' : 'tile', text)
     } else {
       this.showSleep(null)

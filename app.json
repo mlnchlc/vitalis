@@ -21,6 +21,7 @@
     "data:user.hd.spo2",
     "data:user.hd.sleep",
     "data:user.hd.stress",
+    "data:user.hd.pai",
     "data:user.info"
   ],
   "runtime": {

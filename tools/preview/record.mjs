@@ -31,7 +31,7 @@ const enumOf = (names) => Object.fromEntries(names.map((n) => [n, n]))
 
 globalThis.hmUI = {
   widget: enumOf(['IMG', 'TEXT', 'TEXT_IMG', 'FILL_RECT', 'BUTTON', 'ARC_PROGRESS', 'IMG_TIME', 'IMG_WEEK', 'IMG_DATE', 'IMG_LEVEL', 'IMG_STATUS', 'IMG_ANIM', 'WIDGET_DELEGATE']),
-  data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'UVI', 'BIO_CHARGE']),
+  data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'UVI', 'BIO_CHARGE', 'HRV', 'PAI_WEEKLY']),
   align: enumOf(['LEFT', 'RIGHT', 'CENTER_H']),
   prop: enumOf(['TEXT', 'SRC', 'MORE', 'VISIBLE', 'ANIM_STATUS']),
   anim_status: enumOf(['START', 'PAUSE', 'RESUME', 'STOP']),
