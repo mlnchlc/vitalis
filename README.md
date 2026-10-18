@@ -75,4 +75,3 @@ tools/preview/         stub renderer for previews
 - The heartbeat retimes `IMG_ANIM` with `setProperty(prop.MORE, { anim_fps, repeat_count })`
   before each start. If the firmware ignores that, it pulses at a fixed 8 fps instead.
 - Not yet run on a real watch or in the simulator. `zeus build` compiles cleanly.
-- Replace `appId` in `app.json` with one from the Zepp developer console before publishing.
