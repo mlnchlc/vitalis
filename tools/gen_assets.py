@@ -67,10 +67,14 @@ def tint(mask, color):
 EXTRAS = {'colon': ':', 'dot': '.', 'slash': '/', 'pct': '%', 'deg': '°', 'minus': '-', 'invalid': '--'}
 
 
-def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1):
+def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None, proportional=False):
+    """top: shared distance above the baseline (negative) so several sets line up.
+    proportional: each digit keeps its own width (no gap around "1"); slots are
+    still sized from the widest digit."""
     font = ImageFont.truetype(BARLOW[weight], size)
-    probe = '0123456789%' + ('°' if 'deg' in extras else '')
-    top = font.getbbox(probe, anchor='ls')[1]  # negative: distance above baseline
+    if top is None:
+        probe = '0123456789%' + ('°' if 'deg' in extras else '')
+        top = font.getbbox(probe, anchor='ls')[1]  # negative: distance above baseline
     h = -top + 1
     digit_w = max(math.ceil(font.getlength(c)) for c in '0123456789') + pad_x
 
@@ -81,24 +85,33 @@ def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1):
         ImageDraw.Draw(mask).text(((w - tw) / 2, h - 1), text, font=font, fill=255, anchor='ls')
         return tint(mask, color)
 
-    m = {'h': h, 'digit_w': digit_w}
+    m = {'h': h, 'digit_w': digit_w, 'cap': -font.getbbox('0', anchor='ls')[1]}
+    widths = []
     for d in '0123456789':
-        save(glyph(d, digit_w), f'font/{name}/{d}.png')
+        widths.append(save(glyph(d, None if proportional else digit_w), f'font/{name}/{d}.png').width)
+    m['avg_w'] = round(sum(widths) / 10, 1)
     for key in extras:
         m[key] = save(glyph(EXTRAS[key]), f'font/{name}/{key}.png').width
     metrics[name] = m
 
 
-def word_set(name, words, size, color, align='left'):
+def day_set(name, size, color, top):
+    """Days 1-31 as whole words (IMG_DATE day_is_character) so each number is
+    properly spaced, centred in one shared width so the month can sit at fixed x."""
+    word_set(name, [str(d) for d in range(1, 32)], size, color, align='center', top=top, weight='Bold')
+
+
+def word_set(name, words, size, color, align='left', top=None, weight='Bold'):
     """All images in a set share one width so neighbours can sit at fixed x."""
-    font = ImageFont.truetype(BARLOW['Bold'], size)
-    top = font.getbbox('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', anchor='ls')[1]
+    font = ImageFont.truetype(BARLOW[weight], size)
+    if top is None:
+        top = font.getbbox('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', anchor='ls')[1]
     h = -top + 1
     w = max(math.ceil(font.getlength(word)) for word in words) + 1
     for i, word in enumerate(words):
         mask = Image.new('L', (w, h), 0)
         tw = font.getlength(word)
-        x = w - tw if align == 'right' else 0
+        x = {'right': w - tw, 'center': (w - tw) / 2}.get(align, 0)
         ImageDraw.Draw(mask).text((x, h - 1), word, font=font, fill=255, anchor='ls')
         save(tint(mask, color), f'date/{name}_{i}.png')
     metrics[name] = {'h': h, 'w': w}
@@ -187,15 +200,18 @@ def app_icon(size=124):
 
 def date_row():
     """Lays the row out like the wireframe's flex `space-between`: four groups
-    (date, temp, high/low, humidity) with equal gaps, sized for two-digit values."""
-    r, wk, mo = metrics['row'], metrics['week'], metrics['month']
-    dw = r['digit_w']
-    ICON, TRI = 20, 11
+    (date, temp, high/low, humidity) with equal gaps, sized for typical
+    two-digit values. Every set in the row shares one height, so one y gives
+    one baseline; icons centre on the middle of the digits, not the box."""
+    r, wk, mo, day = metrics['row'], metrics['week'], metrics['month'], metrics['day']
+    dw, avg = r['digit_w'], r['avg_w']
+    ICON, TRI, GAP_IN = 20, 11, 8
+    nominal = 2 * avg + r['deg']  # e.g. "24°"
     groups = {
-        'date': wk['w'] + 5 + 2 * dw + 5 + mo['w'],
-        'temp': ICON + 2 + 2 * dw + r['deg'],
-        'hilo': 2 * (TRI + 2 + 2 * dw + r['deg']) + 6,
-        'hum': ICON + 2 + 2 * dw + r['pct'],
+        'date': wk['w'] + 3 + day['w'] + 3 + mo['w'],
+        'temp': ICON + 2 + nominal,
+        'hilo': 2 * (TRI + 2 + nominal) + GAP_IN,
+        'hum': ICON + 2 + 2 * avg + r['pct'],
     }
     gap = (ROW_X1 - ROW_X0 - sum(groups.values())) / 3
     assert gap >= 6, f'date row does not fit (gap {gap:.1f}px)'
@@ -203,25 +219,32 @@ def date_row():
     for k, w in groups.items():
         pos[k] = round(x)
         x += w + gap
-    ty = round(ROW_CY - r['h'] / 2)
-    val_w = 2 * dw + r['deg']
+    y = round(ROW_CY - r['h'] / 2)
+    cap_mid = y + r['h'] - 1 - r['cap'] / 2
+    icon_y, tri_y = round(cap_mid - ICON / 2), round(cap_mid - TRI / 2)
+    low_icon_x = round(pos['hilo'] + TRI + 2 + nominal + GAP_IN)
     lay = {
-        'week': {'x': pos['date'], 'y': round(ROW_CY - wk['h'] / 2)},
-        'day': {'x': pos['date'] + wk['w'] + 5, 'y': ty},
-        'month': {'x': pos['date'] + wk['w'] + 5 + 2 * dw + 5, 'y': round(ROW_CY - mo['h'] / 2)},
-        'tempIcon': {'x': pos['temp'], 'y': ROW_CY - ICON // 2},
-        'temp': {'x': pos['temp'] + ICON + 2, 'y': ty, 'w': r['minus'] + val_w},
-        'highIcon': {'x': pos['hilo'], 'y': ROW_CY - TRI // 2},
-        'high': {'x': pos['hilo'] + TRI + 2, 'y': ty, 'w': val_w},
-        'lowIcon': {'x': pos['hilo'] + TRI + 2 + val_w + 6, 'y': ROW_CY - TRI // 2},
-        'low': {'x': pos['hilo'] + 2 * (TRI + 2) + val_w + 6, 'y': ty, 'w': val_w},
-        'humIcon': {'x': pos['hum'], 'y': ROW_CY - ICON // 2},
-        'hum': {'x': pos['hum'] + ICON + 2, 'y': ty, 'w': 3 * dw + r['pct']},
+        'week': {'x': pos['date'], 'y': y},
+        'day': {'x': pos['date'] + wk['w'] + 3, 'y': y},
+        'month': {'x': pos['date'] + wk['w'] + 3 + day['w'] + 3, 'y': y},
+        'tempIcon': {'x': pos['temp'], 'y': icon_y},
+        'temp': {'x': pos['temp'] + ICON + 2, 'y': y, 'w': r['minus'] + 2 * dw + r['deg']},
+        'highIcon': {'x': pos['hilo'], 'y': tri_y},
+        'high': {'x': pos['hilo'] + TRI + 2, 'y': y, 'w': 2 * dw + r['deg']},
+        'lowIcon': {'x': low_icon_x, 'y': tri_y},
+        'low': {'x': low_icon_x + TRI + 2, 'y': y, 'w': 2 * dw + r['deg']},
+        'humIcon': {'x': pos['hum'], 'y': icon_y},
+        'hum': {'x': pos['hum'] + ICON + 2, 'y': y, 'w': 3 * dw + r['pct']},
         'weatherTap': {'x': pos['temp'] - 6, 'y': 260, 'w': ROW_X1 + 6 - (pos['temp'] - 6), 'h': 32},
         'gap': round(gap, 1),
     }
     metrics['dateRow'] = lay
     return lay
+
+
+def shared_top(size, probe='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789%°'):
+    """Highest point above the baseline across the Bold and SemiBold cuts."""
+    return min(ImageFont.truetype(BARLOW[w], size).getbbox(probe, anchor='ls')[1] for w in ('Bold', 'SemiBold'))
 
 
 def write_metrics_js():
@@ -238,11 +261,14 @@ def main():
     font_set('time', 146, WHITE, ('colon',), pad_x=2)
     font_set('stat', 24, WHITE, ('dot', 'slash'))
     font_set('batt', 44, WHITE, ('pct',))
-    font_set('row', 22, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0)
     font_set('tile', 32, WHITE, ('pct', 'colon', 'invalid'))
     font_set('bot', 30, WHITE, ('invalid',))
-    word_set('week', WEEK, 22, ORANGE, align='right')
-    word_set('month', MONTHS, 22, WHITE)
+    # Date/weather row: one size, one shared baseline
+    row_top = shared_top(22)
+    font_set('row', 22, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, top=row_top, proportional=True)
+    word_set('week', WEEK, 22, ORANGE, align='right', top=row_top)
+    word_set('month', MONTHS, 22, WHITE, top=row_top)
+    day_set('day', 22, WHITE, top=row_top)
 
     # Always-on mode (dim grey)
     font_set('aod', 146, AOD_GRAY, ('colon',), pad_x=2)

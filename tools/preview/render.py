@@ -84,7 +84,10 @@ def draw_time(canvas, w):
 
 def draw_date(canvas, w):
     if 'day_startX' in w:
-        draw_digits(canvas, w['day_startX'], w['day_startY'], DAY, w['day_en_array'], w.get('day_space', 0))
+        if w.get('day_is_character'):
+            canvas.alpha_composite(load(w['day_en_array'][int(DAY) - 1]), (w['day_startX'], w['day_startY']))
+        else:
+            draw_digits(canvas, w['day_startX'], w['day_startY'], DAY, w['day_en_array'], w.get('day_space', 0))
     if 'month_startX' in w:
         canvas.alpha_composite(load(w['month_en_array'][MONTH]), (w['month_startX'], w['month_startY']))
 

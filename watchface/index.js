@@ -162,15 +162,14 @@ WatchFace({
       week_sc: words('week', 7),
       show_level: NORMAL
     })
+    // Days are whole pre-spaced images (1-31) rather than two digits
     hmUI.createWidget(hmUI.widget.IMG_DATE, {
       day_startX: R.day.x,
       day_startY: R.day.y,
-      day_zero: 1,
-      day_space: 0,
-      day_align: hmUI.align.LEFT,
-      day_en_array: digits('row'),
-      day_sc_array: digits('row'),
-      day_tc_array: digits('row'),
+      day_is_character: true,
+      day_en_array: words('day', 31),
+      day_sc_array: words('day', 31),
+      day_tc_array: words('day', 31),
       show_level: NORMAL
     })
     hmUI.createWidget(hmUI.widget.IMG_DATE, {

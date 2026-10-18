@@ -3,30 +3,30 @@ export const M = {
   "time": {
     "h": 104,
     "digit_w": 70,
+    "cap": 103,
+    "avg_w": 70.0,
     "colon": 39
   },
   "stat": {
     "h": 19,
     "digit_w": 13,
+    "cap": 18,
+    "avg_w": 13.0,
     "dot": 7,
     "slash": 11
   },
   "batt": {
     "h": 32,
     "digit_w": 22,
+    "cap": 31,
+    "avg_w": 22.0,
     "pct": 35
-  },
-  "row": {
-    "h": 20,
-    "digit_w": 11,
-    "deg": 8,
-    "pct": 17,
-    "minus": 8,
-    "invalid": 14
   },
   "tile": {
     "h": 24,
     "digit_w": 16,
+    "cap": 23,
+    "avg_w": 16.0,
     "pct": 26,
     "colon": 10,
     "invalid": 20
@@ -34,28 +34,50 @@ export const M = {
   "bot": {
     "h": 23,
     "digit_w": 15,
+    "cap": 22,
+    "avg_w": 15.0,
     "invalid": 19
   },
+  "row": {
+    "h": 20,
+    "digit_w": 11,
+    "cap": 16,
+    "avg_w": 9.7,
+    "deg": 8,
+    "pct": 17,
+    "minus": 8,
+    "invalid": 14
+  },
   "week": {
-    "h": 17,
+    "h": 20,
     "w": 37
   },
   "month": {
-    "h": 17,
+    "h": 20,
     "w": 35
+  },
+  "day": {
+    "h": 20,
+    "w": 22
   },
   "aod": {
     "h": 104,
     "digit_w": 70,
+    "cap": 103,
+    "avg_w": 70.0,
     "colon": 39
   },
   "aod_date": {
     "h": 22,
-    "digit_w": 16
+    "digit_w": 16,
+    "cap": 21,
+    "avg_w": 16.0
   },
   "aod_batt": {
     "h": 19,
     "digit_w": 13,
+    "cap": 18,
+    "avg_w": 13.0,
     "pct": 20
   },
   "aod_week": {
@@ -69,19 +91,19 @@ export const M = {
   "dateRow": {
     "week": {
       "x": 28,
-      "y": 268
+      "y": 266
     },
     "day": {
-      "x": 70,
+      "x": 68,
       "y": 266
     },
     "month": {
-      "x": 97,
-      "y": 268
+      "x": 93,
+      "y": 266
     },
     "tempIcon": {
       "x": 140,
-      "y": 266
+      "y": 267
     },
     "temp": {
       "x": 162,
@@ -89,17 +111,17 @@ export const M = {
       "w": 38
     },
     "highIcon": {
-      "x": 201,
-      "y": 271
+      "x": 202,
+      "y": 272
     },
     "high": {
-      "x": 214,
+      "x": 215,
       "y": 266,
       "w": 30
     },
     "lowIcon": {
       "x": 250,
-      "y": 271
+      "y": 272
     },
     "low": {
       "x": 263,
@@ -107,11 +129,11 @@ export const M = {
       "w": 30
     },
     "humIcon": {
-      "x": 301,
-      "y": 266
+      "x": 304,
+      "y": 267
     },
     "hum": {
-      "x": 323,
+      "x": 326,
       "y": 266,
       "w": 50
     },
@@ -121,6 +143,6 @@ export const M = {
       "w": 234,
       "h": 32
     },
-    "gap": 8.3
+    "gap": 12.5
   }
 }
