@@ -546,7 +546,8 @@ WatchFace({
 
   refreshStress() {
     const { value } = this.stress.getCurrent()
-    if (!(value > 0)) {
+    // 1-100 is a reading; 0 and 255 (watch not worn) mean no data
+    if (!(value > 0 && value <= 100)) {
       this.showStress(null)
       this.stressIcon.setProperty(hmUI.prop.SRC, 'icon/stress.png')
       return
@@ -558,7 +559,7 @@ WatchFace({
 
   refreshHealth() {
     const hr = this.heartRate.getLast()
-    if (hr > 0) {
+    if (hr > 0 && hr < 255) {
       const f = hr / this.maxHr
       this.showHr(f >= HR_HIGH ? 'tile_red' : f >= HR_ELEVATED ? 'tile_orange' : 'tile', String(hr))
     } else {
@@ -566,7 +567,7 @@ WatchFace({
     }
 
     const { value: spo2 } = this.bloodOxygen.getCurrent()
-    if (spo2 > 0) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', String(spo2))
+    if (spo2 > 0 && spo2 <= 100) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', String(spo2))
     else this.showSpo2(null)
 
     const { totalTime } = this.sleep.getInfo()

@@ -280,7 +280,9 @@ def weather_row():
         x = round(MARGIN_X0 + col_w * i + (col_w - (size + GAP + typical)) / 2)
         lay[key + 'Icon'] = {'x': x, 'y': round(mid - size / 2), 'src': f'icon/{icon_name}.png'}
         lay[key] = {'x': x + size + GAP, 'y': y, 'w': slot}
-    lay['tap'] = {'x': MARGIN_X0, 'y': WEATHER_CY - 15, 'w': MARGIN_X1 - MARGIN_X0, 'h': 30}
+    # Short tap area: the watch blanks about 2x a widget's height below its top,
+    # and a 30 px tap here clipped the numbers in the first vitals row.
+    lay['tap'] = {'x': MARGIN_X0, 'y': WEATHER_CY - 10, 'w': MARGIN_X1 - MARGIN_X0, 'h': 20}
     metrics['weatherRow'] = lay
 
 
