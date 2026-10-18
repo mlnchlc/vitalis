@@ -237,6 +237,7 @@ WatchFace({
     this.safely('vitals', () => this.buildVitals())
     // With show_level available, the always-on layout rides along hidden
     if (SHOW_LEVEL) this.safely('aod', () => this.buildAod())
+    this.safely('vitalIcons', () => this.buildVitalIcons())
     this.safely('sensors', () => this.bindSensors())
     this.safely('delegate', () =>
       create(hmUI.widget.WIDGET_DELEGATE, {
@@ -370,33 +371,16 @@ WatchFace({
 
     // Heart rate: animated icon, value coloured by HR zone
     const hb = M.heartbeat
-    this.heartAnim = create(hmUI.widget.IMG_ANIM, {
-      x: C.hr.iconX - hb.pad,
-      y: C.hr.iconY - hb.pad,
-      anim_path: 'anim/hr',
-      anim_prefix: 'hr',
-      anim_ext: 'png',
-      anim_fps: 8,
-      anim_size: hb.frames,
-      repeat_count: 1,
-      anim_status: hmUI.anim_status ? hmUI.anim_status.STOP : 0,
-      default_frame_index: 0,
-      show_level: NORMAL
-    })
     this.showHr = tintedValue(['tile', 'tile_orange', 'tile_red'], () => ({}), invalid, ...at('hr'))
 
-    img(C.spo2.iconX, C.spo2.iconY, 'icon/spo2.png')
     this.showSpo2 = tintedValue(['tile', 'tile_red'], (set) => units(`font/${set}/pct.png`), invalid, ...at('spo2'))
 
-    img(C.hrv.iconX, C.hrv.iconY, 'icon/hrv.png')
     value('tile', { x: C.hrv.x, y: C.hrv.y, w: C.hrv.w, type: hmUI.data_type.HRV, invalid_image: invalid })
 
     // Stress: icon and value take the zone colour
-    this.stressIcon = img(C.stress.iconX, C.stress.iconY, 'icon/stress.png')
     const zones = ['relaxed', 'normal', 'medium', 'high']
     this.showStress = tintedValue(zones.map((z) => `tile_${z}`), () => ({}), invalid, ...at('stress'))
 
-    img(C.hybrid.iconX, C.hybrid.iconY, 'icon/hybrid.png')
     const hybridType = findDataType(HYBRID_NAMES)
     if (hybridType !== undefined) {
       value('tile', { x: C.hybrid.x, y: C.hybrid.y, w: C.hybrid.w, type: hybridType, invalid_image: invalid })
@@ -405,13 +389,10 @@ WatchFace({
     }
 
     // Sleep is "H.MM" with the dot image drawn as a colon
-    img(C.sleep.iconX, C.sleep.iconY, 'icon/sleep.png')
     this.showSleep = tintedValue(['tile', 'tile_amber'], (set) => ({ dot_image: `font/${set}/colon.png` }), invalid, ...at('sleep'))
 
-    img(C.pai.iconX, C.pai.iconY, 'icon/pai.png')
     value('tile', { x: C.pai.x, y: C.pai.y, w: C.pai.w, type: hmUI.data_type.PAI_WEEKLY, invalid_image: invalid })
 
-    img(C.uv.iconX, C.uv.iconY, 'icon/uv.png')
     value('tile', { x: C.uv.x, y: C.uv.y, w: C.uv.w, type: hmUI.data_type.UVI, invalid_image: invalid })
 
     // Every cell opens the closest system app
@@ -434,7 +415,7 @@ WatchFace({
         y: C[key].top + 2,
         w: colW,
         h: 32,
-        src: 'press/cell_press.png',
+        src: 'press/cell.png', // fully transparent: IMG_CLICK always draws its image
         type: dataTaps[key],
         show_level: NORMAL
       })
@@ -444,6 +425,28 @@ WatchFace({
       vline(C[key].col, C.hr.top + 6, 24)
       vline(C[key].col, C.hybrid.top + 6, 24)
     })
+  },
+
+  // Vitals icons are created after everything else so no other widget can
+  // be drawn over them (the first row's icon tops were clipped on the watch).
+  buildVitalIcons() {
+    const C = M.vitals.cells
+    const hb = M.heartbeat
+    this.heartAnim = create(hmUI.widget.IMG_ANIM, {
+      x: C.hr.iconX - hb.pad,
+      y: C.hr.iconY - hb.pad,
+      anim_path: 'anim/hr',
+      anim_prefix: 'hr',
+      anim_ext: 'png',
+      anim_fps: 8,
+      anim_size: hb.frames,
+      repeat_count: 1,
+      anim_status: hmUI.anim_status ? hmUI.anim_status.STOP : 0,
+      default_frame_index: 0,
+      show_level: NORMAL
+    })
+    ;['spo2', 'hrv', 'hybrid', 'sleep', 'pai', 'uv'].forEach((key) => img(C[key].iconX, C[key].iconY, `icon/${key}.png`))
+    this.stressIcon = img(C.stress.iconX, C.stress.iconY, 'icon/stress.png')
   },
 
   // ---- always-on display: dim time, date, battery at the same positions ----
