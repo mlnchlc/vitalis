@@ -112,6 +112,8 @@ def render(widgets, level):
     canvas = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     d = ImageDraw.Draw(canvas)
     for w in widgets:
+        if w.get('visible') is False:
+            continue
         shown = w.get('show_level')
         if shown is not None and not (shown & level):
             continue
@@ -132,6 +134,9 @@ def render(widgets, level):
             draw_date(canvas, w)
         elif t == 'ARC_PROGRESS':
             draw_arc(canvas, w)
+        elif t == 'IMG_ANIM':
+            frame = w.get('default_frame_index', 0)
+            canvas.alpha_composite(load(f"{w['anim_path']}/{w['anim_prefix']}_{frame}.{w['anim_ext']}"), (w['x'], w['y']))
         elif t == 'IMG_LEVEL':
             v = int(SAMPLE.get(w.get('type'), '0'))
             idx = round(v / 100 * (w['image_length'] - 1))
@@ -145,10 +150,18 @@ def render(widgets, level):
 
 
 def main():
+    global TIME
     with open(sys.argv[1]) as f:
-        widgets = json.load(f)
+        data = json.load(f)
+    TIME = (data['time'][:2], data['time'][2:])
+    widgets = data['widgets']
     out_dir = os.path.join(ROOT, 'preview')
     os.makedirs(out_dir, exist_ok=True)
+    # Optional second argument: render only the normal screen to that name
+    if len(sys.argv) > 2:
+        render(widgets, 1).save(os.path.join(out_dir, sys.argv[2]))
+        print(f'wrote preview/{sys.argv[2]}')
+        return
     normal = render(widgets, 1)
     normal.save(os.path.join(out_dir, 'normal.png'))
     render(widgets, 2).save(os.path.join(out_dir, 'aod.png'))

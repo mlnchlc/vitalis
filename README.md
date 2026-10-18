@@ -15,6 +15,17 @@ A health- and time-focused watchface for the **Amazfit Bip 6** (Zepp OS, API lev
 | Bottom | HybridCharge 0–100 + bar · Stress 0–100 + bar | – / Stress |
 | Always-on | Dim grey time, date, battery | – |
 
+**Dynamic states** (see `preview/alerts.png`):
+
+| Element | Changes |
+|---|---|
+| Stress | Icon, value and bar coloured by zone: relaxed 1–39 blue · normal 40–59 green · medium 60–79 orange · high 80–100 red |
+| Heart rate | White below 60% of max HR (220 − age from your Zepp profile), orange 60–79%, red ≥ 80% |
+| SpO₂ | Red below 92% |
+| Sleep | Amber under 6 h |
+| Weekday | Gold at dawn (sunrise ± 1 h), orange by day, pink at dusk (sunset ± 1 h), blue at night |
+| Heart icon | ~3 s "lub-dub" pulse at your current heart rate after each wrist raise |
+
 Device: 1.97" AMOLED, 390 × 450, rounded square (r = 86); deviceSource 9765120, 9765121, 10158337.
 
 ## Build and install
@@ -61,5 +72,7 @@ tools/preview/         stub renderer for previews
   it shows `--` with an empty bar. The Bip 6 wasn't on Zepp's initial HybridCharge rollout list.
 - The HybridCharge bar relies on `IMG_LEVEL` honouring `type`, which Watchface Maker uses
   but the API reference doesn't document.
+- The heartbeat retimes `IMG_ANIM` with `setProperty(prop.MORE, { anim_fps, repeat_count })`
+  before each start. If the firmware ignores that, it pulses at a fixed 8 fps instead.
 - Not yet run on a real watch or in the simulator. `zeus build` compiles cleanly.
 - Replace `appId` in `app.json` with one from the Zepp developer console before publishing.

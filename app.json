@@ -20,7 +20,8 @@
     "data:user.hd.heart_rate",
     "data:user.hd.spo2",
     "data:user.hd.sleep",
-    "data:user.hd.stress"
+    "data:user.hd.stress",
+    "data:user.info"
   ],
   "runtime": {
     "apiVersion": {

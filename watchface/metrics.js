@@ -31,6 +31,33 @@ export const M = {
     "colon": 9,
     "invalid": 18
   },
+  "tile_orange": {
+    "h": 21,
+    "digit_w": 14,
+    "cap": 20,
+    "avg_w": 12.9,
+    "pct": 23,
+    "colon": 9,
+    "invalid": 18
+  },
+  "tile_red": {
+    "h": 21,
+    "digit_w": 14,
+    "cap": 20,
+    "avg_w": 12.9,
+    "pct": 23,
+    "colon": 9,
+    "invalid": 18
+  },
+  "tile_amber": {
+    "h": 21,
+    "digit_w": 14,
+    "cap": 20,
+    "avg_w": 12.9,
+    "pct": 23,
+    "colon": 9,
+    "invalid": 18
+  },
   "bot": {
     "h": 23,
     "digit_w": 15,
@@ -38,7 +65,43 @@ export const M = {
     "avg_w": 15.0,
     "invalid": 19
   },
-  "week": {
+  "bot_relaxed": {
+    "h": 23,
+    "digit_w": 15,
+    "cap": 22,
+    "avg_w": 15.0
+  },
+  "bot_normal": {
+    "h": 23,
+    "digit_w": 15,
+    "cap": 22,
+    "avg_w": 15.0
+  },
+  "bot_medium": {
+    "h": 23,
+    "digit_w": 15,
+    "cap": 22,
+    "avg_w": 15.0
+  },
+  "bot_high": {
+    "h": 23,
+    "digit_w": 15,
+    "cap": 22,
+    "avg_w": 15.0
+  },
+  "week_dawn": {
+    "h": 22,
+    "w": 40
+  },
+  "week_day": {
+    "h": 22,
+    "w": 40
+  },
+  "week_dusk": {
+    "h": 22,
+    "w": 40
+  },
+  "week_night": {
     "h": 22,
     "w": 40
   },
@@ -85,6 +148,10 @@ export const M = {
     "cap": 18,
     "avg_w": 13.0,
     "pct": 20
+  },
+  "heartbeat": {
+    "frames": 6,
+    "pad": 3
   },
   "dateRow": {
     "week": {

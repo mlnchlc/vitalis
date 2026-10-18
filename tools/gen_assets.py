@@ -40,6 +40,12 @@ GOOD = '#34d399'
 WARN = '#ffb020'
 BAD = '#ff4545'
 TRACK = '#26262c'
+# Zepp stress zones: relaxed 1-39, normal 40-59, medium 60-79, high 80-100
+STRESS_ZONES = {'relaxed': '#4da3ff', 'normal': '#34d399', 'medium': '#ffb020', 'high': '#ff4545'}
+# Value colours for health tiles: HR zones and SpO2 / sleep warnings
+TILE_TINTS = {'orange': '#ff9f43', 'red': '#ff4545', 'amber': '#ffb020'}
+# Weekday accent by time of day
+WEEK_PHASES = {'dawn': '#ffc46b', 'day': ORANGE, 'dusk': '#ff5e7e', 'night': '#7b8cff'}
 
 SS = 4  # supersampling factor for icons and shapes
 
@@ -186,6 +192,22 @@ def press_overlay(rel, w, h, radius=14):
     save(big.resize((w, h), Image.LANCZOS), f'press/{rel}_press.png')
 
 
+# "lub-dub" pulse: scale of the heart in each frame
+HEARTBEAT = [1.0, 1.1, 1.2, 1.05, 1.15, 1.0]
+HEART_PAD = 3  # frames are larger than the icon so the 120% frame isn't clipped
+
+
+def heartbeat_frames(size):
+    canvas = size + 2 * HEART_PAD
+    for i, scale in enumerate(HEARTBEAT):
+        s = round(size * scale)
+        heart = tint(symbol_mask('ecg_heart', s), HR)
+        img = Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0))
+        img.alpha_composite(heart, ((canvas - s) // 2, (canvas - s) // 2))
+        save(img, f'anim/hr/hr_{i}.png')
+    metrics['heartbeat'] = {'frames': len(HEARTBEAT), 'pad': HEART_PAD}
+
+
 def app_icon(size=124):
     big = size * SS
     img = Image.new('RGBA', (big, big), (0, 0, 0, 0))
@@ -208,7 +230,7 @@ def cap_mid(y, m):
 
 def date_row():
     """Day, date and month centred as one group. All three share one height."""
-    wk, mo, day = metrics['week'], metrics['month'], metrics['day']
+    wk, mo, day = metrics['week_day'], metrics['month'], metrics['day']
     total = wk['w'] + 6 + day['w'] + 6 + mo['w']
     x = round((390 - total) / 2)
     y = round(DATE_CY - wk['h'] / 2)
@@ -280,10 +302,15 @@ def main():
     font_set('stat', 24, WHITE, ('dot', 'slash'))
     font_set('batt', 40, WHITE, ('pct',))
     font_set('tile', 28, WHITE, ('pct', 'colon', 'invalid'), proportional=True)
+    for tint_name, c in TILE_TINTS.items():
+        font_set(f'tile_{tint_name}', 28, c, ('pct', 'colon', 'invalid'), proportional=True)
     font_set('bot', 30, WHITE, ('invalid',))
+    for zone, c in STRESS_ZONES.items():
+        font_set(f'bot_{zone}', 30, c)
     # Date row: day/date/month share one height so they share a baseline
     date_top = shared_top(24)
-    word_set('week', WEEK, 24, ORANGE, align='right', top=date_top)
+    for phase, c in WEEK_PHASES.items():
+        word_set(f'week_{phase}', WEEK, 24, c, align='right', top=date_top)
     word_set('month', MONTHS, 24, WHITE, top=date_top)
     day_set('day', 24, WHITE, top=date_top)
     font_set('wx', 22, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, proportional=True)
@@ -306,10 +333,13 @@ def main():
     triangle('high', 11, '#ff6b5a', up=True)
     triangle('low', 11, '#4da3ff', up=False)
     icon('hr', 'ecg_heart', 24, HR)
+    heartbeat_frames(24)
     icon('spo2', 'spo2', 24, SPO2)
     icon('sleep', 'bedtime', 24, SLEEP)
     icon('hybrid', 'electric_bolt', 26, HYBRID)
     icon('stress', 'psychology', 26, STRESS)
+    for zone, c in STRESS_ZONES.items():
+        icon(f'stress_{zone}', 'psychology', 26, c)
     # Status icons: each shown only while its state is active
     icon('bt_off', 'bluetooth_disabled', 24, BAD)
     icon('dnd', 'do_not_disturb_on', 24, '#a78bfa')
@@ -319,7 +349,8 @@ def main():
 
     bar_set('battery', 118, 12, lambda i: BAD if i <= 2 else (WARN if i <= 4 else GOOD))
     bar_set('hybrid', 68, 8, lambda i: HYBRID)
-    bar_set('stress', 68, 8, lambda i: STRESS)
+    for zone, c in STRESS_ZONES.items():
+        bar_set(f'stress_{zone}', 68, 8, lambda i, c=c: c)
     bar_set('aod_battery', 46, 12, lambda i: '#4a4a50')
 
     date_row()

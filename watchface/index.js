@@ -1,4 +1,5 @@
-import { Battery, Step, Calorie, Stand, Stress } from '@zos/sensor'
+import { Battery, Step, Calorie, Stand, Stress, HeartRate, BloodOxygen, Sleep, Time, Weather } from '@zos/sensor'
+import { getProfile } from '@zos/user'
 import {
   launchApp,
   SYSTEM_APP_STATUS,
@@ -24,6 +25,15 @@ const words = (set, n) => Array.from({ length: n }, (_, i) => `date/${set}_${i}.
 const units = (src) => ({ unit_en: src, unit_sc: src, unit_tc: src, imperial_unit_en: src, imperial_unit_sc: src, imperial_unit_tc: src })
 const barSrc = (name, pct) => `bar/${name}/${Math.max(0, Math.min(BAR_STEPS, Math.round((pct / 100) * BAR_STEPS)))}.png`
 const pctOf = (cur, target) => (target > 0 ? Math.min(100, (cur * 100) / target) : 0)
+const pad2 = (n) => String(n).padStart(2, '0')
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
+// Thresholds agreed in the design
+const SPO2_LOW = 92 // % - below this SpO2 turns red
+const SLEEP_SHORT = 6 * 60 // minutes - under this sleep turns amber
+const HR_ELEVATED = 0.6 // fraction of max HR (220 - age) where HR turns orange
+const HR_HIGH = 0.8 // ... and red
+const stressZone = (v) => (v < 40 ? 'relaxed' : v < 60 ? 'normal' : v < 80 ? 'medium' : 'high')
 
 // HybridCharge is a newer data field; its data_type constant isn't in the
 // published API reference yet, so look it up by name at runtime.
@@ -76,16 +86,33 @@ function ring(cx, cy, radius, color) {
   return (level) => arc.setProperty(hmUI.prop.MORE, { ...base, color, level: Math.round(level) })
 }
 
+// One value drawn in one of several colours: a TEXT_IMG per colour set at
+// the same spot, only the active one has text. show(null) shows "--".
+function tintedValue(sets, optsFor, invalidSrc, x, y) {
+  const widgets = {}
+  sets.forEach((set) => {
+    widgets[set] = value(set, { x, y, w: 80, ...optsFor(set), text: '' })
+  })
+  const invalid = img(x, y, invalidSrc)
+  invalid.setProperty(hmUI.prop.VISIBLE, false)
+  return (active, text) => {
+    sets.forEach((set) => widgets[set].setProperty(hmUI.prop.TEXT, set === active ? text : ''))
+    invalid.setProperty(hmUI.prop.VISIBLE, active === null)
+  }
+}
+
 // Day of week, day (whole pre-spaced images 1-31) and month, at fixed spots
 function dateGroup(sets, pos, show_level) {
-  hmUI.createWidget(hmUI.widget.IMG_WEEK, {
-    x: pos.week.x,
-    y: pos.week.y,
-    week_en: words(sets.week, 7),
-    week_tc: words(sets.week, 7),
-    week_sc: words(sets.week, 7),
-    show_level
-  })
+  if (sets.week) {
+    hmUI.createWidget(hmUI.widget.IMG_WEEK, {
+      x: pos.week.x,
+      y: pos.week.y,
+      week_en: words(sets.week, 7),
+      week_tc: words(sets.week, 7),
+      week_sc: words(sets.week, 7),
+      show_level
+    })
+  }
   hmUI.createWidget(hmUI.widget.IMG_DATE, {
     day_startX: pos.day.x,
     day_startY: pos.day.y,
@@ -205,7 +232,9 @@ WatchFace({
   // ---- middle: date (positions computed by gen_assets.py) ----
   buildDate() {
     const R = M.dateRow
-    dateGroup({ week: 'week', day: 'day', month: 'month' }, R, NORMAL)
+    // Weekday is drawn by refreshAccent(): its colour follows the time of day
+    this.weekday = img(R.week.x, R.week.y, 'date/week_day_0.png')
+    dateGroup({ day: 'day', month: 'month' }, R, NORMAL)
   },
 
   // ---- middle: weather, five equal columns ----
@@ -231,28 +260,46 @@ WatchFace({
     tap(R.tap.x, R.tap.y, R.tap.w, R.tap.h, 'weather', SYSTEM_APP_WEATHER)
   },
 
-  // ---- health tiles: HR, SpO2, sleep; icon beside value ----
+  // ---- health tiles: HR, SpO2, sleep; icon beside value, colour by state ----
   buildHealthTiles() {
-    const tiles = [
-      { key: 'hr', type: hmUI.data_type.HEART, app: SYSTEM_APP_HR },
-      { key: 'spo2', type: hmUI.data_type.SPO2, app: SYSTEM_APP_SPO2, unit: 'font/tile/pct.png' },
-      // SLEEP is HH:MM; the dot image doubles as the colon separator
-      { key: 'sleep', type: hmUI.data_type.SLEEP, app: SYSTEM_APP_SLEEP, dot: 'font/tile/colon.png' }
-    ]
-    tiles.forEach((t, i) => {
-      const L = M.tiles[t.key]
-      img(L.iconX, L.iconY, `icon/${t.key}.png`)
-      value('tile', {
-        x: L.x,
-        y: L.y,
-        w: L.col + 114 - L.x,
-        type: t.type,
-        invalid_image: 'font/tile/invalid.png',
-        ...(t.unit ? units(t.unit) : {}),
-        ...(t.dot ? { dot_image: t.dot } : {})
-      })
-      tap(L.col, 328, 114, 36, 'tile', t.app)
-      if (i) vline(L.col, 332, 28)
+    const unitsIn = (set) => units(`font/${set}/pct.png`)
+    const hr = M.tiles.hr
+    const hb = M.heartbeat
+    this.heartAnim = hmUI.createWidget(hmUI.widget.IMG_ANIM, {
+      x: hr.iconX - hb.pad,
+      y: hr.iconY - hb.pad,
+      anim_path: 'anim/hr',
+      anim_prefix: 'hr',
+      anim_ext: 'png',
+      anim_fps: 8,
+      anim_size: hb.frames,
+      repeat_count: 1,
+      anim_status: hmUI.anim_status.STOP,
+      default_frame_index: 0,
+      show_level: NORMAL
+    })
+    this.showHr = tintedValue(['tile', 'tile_orange', 'tile_red'], () => ({}), 'font/tile/invalid.png', hr.x, hr.y)
+
+    const spo2 = M.tiles.spo2
+    img(spo2.iconX, spo2.iconY, 'icon/spo2.png')
+    this.showSpo2 = tintedValue(['tile', 'tile_red'], unitsIn, 'font/tile/invalid.png', spo2.x, spo2.y)
+
+    // Sleep is "HH.MM" with the dot image drawn as a colon
+    const sleep = M.tiles.sleep
+    img(sleep.iconX, sleep.iconY, 'icon/sleep.png')
+    this.showSleep = tintedValue(
+      ['tile', 'tile_amber'],
+      (set) => ({ dot_image: `font/${set}/colon.png` }),
+      'font/tile/invalid.png',
+      sleep.x,
+      sleep.y
+    )
+
+    const apps = { hr: SYSTEM_APP_HR, spo2: SYSTEM_APP_SPO2, sleep: SYSTEM_APP_SLEEP }
+    Object.keys(apps).forEach((key, i) => {
+      const col = M.tiles[key].col
+      tap(col, 328, 114, 36, 'tile', apps[key])
+      if (i) vline(col, 332, 28)
     })
   },
 
@@ -282,15 +329,11 @@ WatchFace({
       img(cols[0] + 82, barY, barSrc('hybrid', 0))
     }
 
-    img(cols[1], iconY, 'icon/stress.png')
-    value('bot', {
-      x: cols[1] + 32,
-      y: valueY,
-      w: 46,
-      type: hmUI.data_type.STRESS,
-      invalid_image: 'font/bot/invalid.png'
-    })
-    this.stressBar = img(cols[1] + 82, barY, barSrc('stress', 0))
+    // Stress: icon, value and bar all take the zone colour
+    this.stressIcon = img(cols[1], iconY, 'icon/stress.png')
+    const zones = ['relaxed', 'normal', 'medium', 'high']
+    this.showStress = tintedValue(zones.map((z) => `bot_${z}`), () => ({ w: 46 }), 'font/bot/invalid.png', cols[1] + 32, valueY)
+    this.stressBar = img(cols[1] + 82, barY, barSrc('stress_relaxed', 0))
     tap(cols[1], cy - 20, 150, 40, 'stress', SYSTEM_APP_PRESSURE)
   },
 
@@ -343,29 +386,46 @@ WatchFace({
     })
   },
 
-  // ---- values that need JS: ring levels, stand "now/goal", bar images ----
+  // ---- values that need JS: rings, stand "now/goal", bars, colour states ----
   bindSensors() {
     this.battery = new Battery()
     this.step = new Step()
     this.calorie = new Calorie()
     this.stand = new Stand()
     this.stress = new Stress()
+    this.heartRate = new HeartRate()
+    this.bloodOxygen = new BloodOxygen()
+    this.sleep = new Sleep()
+    this.time = new Time()
+    this.weather = new Weather()
+    const { age } = getProfile()
+    this.maxHr = age > 0 ? 220 - age : 190
 
     this.onActivity = () => this.refreshActivity()
     this.onBattery = () => this.refreshBattery()
     this.onStress = () => this.refreshStress()
+    this.onHealth = () => this.refreshHealth()
     this.step.onChange(this.onActivity)
     this.calorie.onChange(this.onActivity)
     this.stand.onChange(this.onActivity)
     this.battery.onChange(this.onBattery)
     this.stress.onChange(this.onStress)
+    this.heartRate.onLastChange(this.onHealth)
+    this.bloodOxygen.onChange(this.onHealth)
+    this.time.onPerMinute(() => this.refreshAccent())
     this.refresh()
   },
 
+  // Every wrist raise / return to the face
   refresh() {
+    this.sleep.updateInfo()
+    this.readSunTimes()
     this.refreshActivity()
     this.refreshBattery()
     this.refreshStress()
+    this.refreshHealth()
+    this.refreshAccent()
+    this.heartbeat()
   },
 
   refreshActivity() {
@@ -385,7 +445,76 @@ WatchFace({
 
   refreshStress() {
     const { value } = this.stress.getCurrent()
-    this.stressBar.setProperty(hmUI.prop.SRC, barSrc('stress', value || 0))
+    if (!(value > 0)) {
+      this.showStress(null)
+      this.stressIcon.setProperty(hmUI.prop.SRC, 'icon/stress.png')
+      this.stressBar.setProperty(hmUI.prop.SRC, barSrc('stress_relaxed', 0))
+      return
+    }
+    const zone = stressZone(value)
+    this.showStress(`bot_${zone}`, String(value))
+    this.stressIcon.setProperty(hmUI.prop.SRC, `icon/stress_${zone}.png`)
+    this.stressBar.setProperty(hmUI.prop.SRC, barSrc(`stress_${zone}`, value))
+  },
+
+  refreshHealth() {
+    const hr = this.heartRate.getLast()
+    if (hr > 0) {
+      const f = hr / this.maxHr
+      this.showHr(f >= HR_HIGH ? 'tile_red' : f >= HR_ELEVATED ? 'tile_orange' : 'tile', String(hr))
+    } else {
+      this.showHr(null)
+    }
+
+    const { value: spo2 } = this.bloodOxygen.getCurrent()
+    if (spo2 > 0) this.showSpo2(spo2 < SPO2_LOW ? 'tile_red' : 'tile', `${spo2}u`)
+    else this.showSpo2(null)
+
+    const { totalTime } = this.sleep.getInfo()
+    if (totalTime > 0) {
+      const text = `${pad2(Math.floor(totalTime / 60))}.${pad2(totalTime % 60)}`
+      this.showSleep(totalTime < SLEEP_SHORT ? 'tile_amber' : 'tile', text)
+    } else {
+      this.showSleep(null)
+    }
+  },
+
+  // Today's sunrise/sunset from the weather data; 06:00 / 18:00 without it
+  readSunTimes() {
+    this.sunrise = 6 * 60
+    this.sunset = 18 * 60
+    try {
+      const forecast = this.weather.getForecastWeather ? this.weather.getForecastWeather() : this.weather.getForecast()
+      const today = forecast.tideData.data[0]
+      this.sunrise = today.sunrise.hour * 60 + today.sunrise.minute
+      this.sunset = today.sunset.hour * 60 + today.sunset.minute
+    } catch (e) {
+      // no weather synced yet
+    }
+  },
+
+  // Weekday colour: dawn (sunrise +/- 1 h), day, dusk (sunset +/- 1 h), night
+  refreshAccent() {
+    const now = this.time.getHours() * 60 + this.time.getMinutes()
+    let phase = 'night'
+    if (Math.abs(now - this.sunrise) <= 60) phase = 'dawn'
+    else if (Math.abs(now - this.sunset) <= 60) phase = 'dusk'
+    else if (now > this.sunrise && now < this.sunset) phase = 'day'
+    this.weekday.setProperty(hmUI.prop.SRC, `date/week_${phase}_${this.time.getDay() - 1}.png`)
+  },
+
+  // ~3 s of "lub-dub" at the current heart rate
+  heartbeat() {
+    const bpm = this.heartRate.getLast() > 0 ? this.heartRate.getLast() : 72
+    const fps = clamp(Math.round((M.heartbeat.frames * bpm) / 60), 4, 24)
+    const beats = Math.max(1, Math.round((3 * bpm) / 60))
+    try {
+      this.heartAnim.setProperty(hmUI.prop.ANIM_STATUS, hmUI.anim_status.STOP)
+    } catch (e) {
+      // not running yet
+    }
+    this.heartAnim.setProperty(hmUI.prop.MORE, { anim_fps: fps, repeat_count: beats })
+    this.heartAnim.setProperty(hmUI.prop.ANIM_STATUS, hmUI.anim_status.START)
   },
 
   onInit() {},
@@ -400,5 +529,7 @@ WatchFace({
     this.stand.offChange(this.onActivity)
     this.battery.offChange(this.onBattery)
     this.stress.offChange(this.onStress)
+    this.heartRate.offLastChange(this.onHealth)
+    this.bloodOxygen.offChange(this.onHealth)
   }
 })
