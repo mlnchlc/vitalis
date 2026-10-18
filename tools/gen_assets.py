@@ -151,16 +151,20 @@ def codepoint(name):
 
 
 def symbol_mask(name, size, weight=500, fill=1):
+    """The glyph scaled to fit a size x size square with a 1 px margin.
+    (Cropping a fixed em square cut the tops off filled glyphs like the heart.)"""
     big = size * SS
     font = ImageFont.truetype(SYMBOLS, big)
     font.set_variation_by_axes([fill, 0, 48, weight])
     canvas = Image.new('L', (big * 2, big * 2), 0)
     ImageDraw.Draw(canvas).text((big, big), codepoint(name), font=font, fill=255, anchor='mm')
-    # Material glyphs sit on a square em; crop that em around the visual centre.
-    l, t, r, b = canvas.getbbox()
-    cx, cy = (l + r) / 2, (t + b) / 2
-    em = canvas.crop((int(cx - big / 2), int(cy - big / 2), int(cx + big / 2), int(cy + big / 2)))
-    return em.resize((size, size), Image.LANCZOS)
+    glyph = canvas.crop(canvas.getbbox())
+    inner = (size - 2) * SS
+    scale = min(inner / glyph.width, inner / glyph.height)
+    glyph = glyph.resize((max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))), Image.LANCZOS)
+    square = Image.new('L', (big, big), 0)
+    square.paste(glyph, ((big - glyph.width) // 2, (big - glyph.height) // 2))
+    return square.resize((size, size), Image.LANCZOS)
 
 
 def icon(rel, name, size, color, **kw):

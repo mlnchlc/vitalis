@@ -11,8 +11,7 @@ import {
   SYSTEM_APP_WEATHER,
   SYSTEM_APP_ALARM,
   SYSTEM_APP_CALENDAR,
-  SYSTEM_APP_SETTING,
-  SYSTEM_APP_READINESS
+  SYSTEM_APP_SETTING
 } from '@zos/router'
 import * as zosUI from '@zos/ui'
 import { getScene, SCENE_AOD } from '@zos/app'
@@ -419,14 +418,27 @@ WatchFace({
     const apps = {
       hr: SYSTEM_APP_HR,
       spo2: SYSTEM_APP_SPO2,
-      hrv: SYSTEM_APP_HR,
       stress: SYSTEM_APP_PRESSURE,
-      hybrid: SYSTEM_APP_READINESS,
       sleep: SYSTEM_APP_SLEEP,
       pai: SYSTEM_APP_PAI,
       uv: SYSTEM_APP_WEATHER
     }
     Object.keys(apps).forEach((key) => tap(C[key].col, C[key].top + 2, colW, 32, 'cell', apps[key]))
+    // HRV and HybridCharge have no system app ID; IMG_CLICK opens the
+    // watch's own page for a data type instead.
+    const dataTaps = { hrv: hmUI.data_type.HRV, hybrid: hybridType }
+    Object.keys(dataTaps).forEach((key) => {
+      if (dataTaps[key] === undefined) return
+      create(hmUI.widget.IMG_CLICK, {
+        x: C[key].col,
+        y: C[key].top + 2,
+        w: colW,
+        h: 32,
+        src: 'press/cell_press.png',
+        type: dataTaps[key],
+        show_level: NORMAL
+      })
+    })
     // Column separators, shared by both rows
     ;['spo2', 'hrv', 'stress'].forEach((key) => {
       vline(C[key].col, C.hr.top + 6, 24)
