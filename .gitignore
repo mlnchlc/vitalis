@@ -6,3 +6,4 @@ dist/
 tools/fonts/
 __pycache__/
 preview/widgets.json
+release/
