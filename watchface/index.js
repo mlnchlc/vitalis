@@ -93,16 +93,22 @@ function ring(cx, cy, radius, color) {
 }
 
 // One value drawn in one of several colours: a TEXT_IMG per colour set at
-// the same spot, only the active one has text. show(null) shows "--".
+// the same spot, only the active one visible. show(null) shows "--".
+// (An empty-text TEXT_IMG still draws "0" on the watch, so inactive copies
+// are hidden rather than blanked.)
 function tintedValue(sets, optsFor, invalidSrc, x, y) {
   const widgets = {}
   sets.forEach((set) => {
-    widgets[set] = value(set, { x, y, w: 80, ...optsFor(set), text: '' })
+    widgets[set] = value(set, { x, y, w: 80, ...optsFor(set), text: '0' })
+    widgets[set].setProperty(hmUI.prop.VISIBLE, false)
   })
   const invalid = img(x, y, invalidSrc)
   invalid.setProperty(hmUI.prop.VISIBLE, false)
   return (active, text) => {
-    sets.forEach((set) => widgets[set].setProperty(hmUI.prop.TEXT, set === active ? text : ''))
+    sets.forEach((set) => {
+      if (set === active) widgets[set].setProperty(hmUI.prop.TEXT, text)
+      widgets[set].setProperty(hmUI.prop.VISIBLE, set === active)
+    })
     invalid.setProperty(hmUI.prop.VISIBLE, active === null)
   }
 }
