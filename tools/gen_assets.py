@@ -363,6 +363,10 @@ def main():
     icon('lock', 'lock', 24, '#8c8c96')
 
     bar_set('aod_battery', 46, 12, lambda i: '#4a4a50')
+    # Divider lines as images: FILL_RECT lines clipped neighbouring widgets on the Bip 6
+    save(Image.new('RGBA', (MARGIN_X1 - MARGIN_X0, 1), '#2a2a30'), 'line/h.png')
+    for h in (24, 100):
+        save(Image.new('RGBA', (1, h), '#2a2a30'), f'line/v{h}.png')
 
     time_w = 4 * metrics['time']['digit_w'] + metrics['time']['colon']
     assert time_w <= MARGIN_X1 - MARGIN_X0, f'time is {time_w}px, wider than the margins'
@@ -371,7 +375,7 @@ def main():
     vitals_grid()
     wt = metrics['weatherRow']['tap']
     press_overlay('activity', 198, 102)
-    press_overlay('cell', metrics['vitals']['colW'], 40, radius=10)
+    press_overlay('cell', metrics['vitals']['colW'], 32, radius=10)
     press_overlay('weather', wt['w'], wt['h'], radius=10)
     app_icon()
 

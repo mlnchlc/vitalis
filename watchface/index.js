@@ -27,7 +27,6 @@ const hmUI = typeof globalThis.hmUI === 'object' && globalThis.hmUI !== null ? g
 const SHOW_LEVEL = hmUI.show_level && hmUI.show_level.ONAL_AOD !== undefined ? hmUI.show_level : null
 const NORMAL = SHOW_LEVEL ? SHOW_LEVEL.ONLY_NORMAL : undefined
 const AOD = SHOW_LEVEL ? SHOW_LEVEL.ONAL_AOD : undefined
-const LINE = 0x2a2a30
 const RING_TRACK = 0x2a2a30
 const BAR_STEPS = 10
 
@@ -88,12 +87,14 @@ function img(x, y, src, show_level = NORMAL) {
   return create(hmUI.widget.IMG, { x, y, src, show_level })
 }
 
+// Divider lines are 1 px images: on the Bip 6, FILL_RECT lines clipped the
+// top of the row below them.
 function hline(y) {
-  create(hmUI.widget.FILL_RECT, { x: 24, y, w: 342, h: 1, color: LINE, show_level: NORMAL })
+  img(24, y, 'line/h.png')
 }
 
 function vline(x, y, h) {
-  create(hmUI.widget.FILL_RECT, { x, y, w: 1, h, color: LINE, show_level: NORMAL })
+  img(x, y, `line/v${h}.png`)
 }
 
 function value(set, opts) {
@@ -400,7 +401,7 @@ WatchFace({
     value('tile', { x: C.uv.x, y: C.uv.y, w: C.uv.w, type: hmUI.data_type.UVI, invalid_image: invalid })
 
     const apps = { hr: SYSTEM_APP_HR, spo2: SYSTEM_APP_SPO2, stress: SYSTEM_APP_PRESSURE, sleep: SYSTEM_APP_SLEEP, pai: SYSTEM_APP_PAI }
-    Object.keys(apps).forEach((key) => tap(C[key].col, C[key].top - 2, colW, 40, 'cell', apps[key]))
+    Object.keys(apps).forEach((key) => tap(C[key].col, C[key].top + 2, colW, 32, 'cell', apps[key]))
     // Column separators, shared by both rows
     ;['spo2', 'hrv', 'stress'].forEach((key) => {
       vline(C[key].col, C.hr.top + 6, 24)
