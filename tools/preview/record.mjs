@@ -30,7 +30,7 @@ const widgets = []
 const enumOf = (names) => Object.fromEntries(names.map((n) => [n, n]))
 
 globalThis.hmUI = {
-  widget: enumOf(['IMG', 'TEXT_IMG', 'FILL_RECT', 'BUTTON', 'ARC_PROGRESS', 'IMG_TIME', 'IMG_WEEK', 'IMG_DATE', 'IMG_LEVEL', 'IMG_STATUS', 'IMG_ANIM', 'WIDGET_DELEGATE']),
+  widget: enumOf(['IMG', 'TEXT', 'TEXT_IMG', 'FILL_RECT', 'BUTTON', 'ARC_PROGRESS', 'IMG_TIME', 'IMG_WEEK', 'IMG_DATE', 'IMG_LEVEL', 'IMG_STATUS', 'IMG_ANIM', 'WIDGET_DELEGATE']),
   data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'UVI', 'HYBRID_CHARGE']),
   align: enumOf(['LEFT', 'RIGHT', 'CENTER_H']),
   prop: enumOf(['TEXT', 'SRC', 'MORE', 'VISIBLE', 'ANIM_STATUS']),
@@ -98,6 +98,7 @@ let src = readFileSync(join(root, 'watchface', 'index.js'), 'utf8')
 src = src
   .replace(/import \{([^}]*)\} from '@zos\/sensor'/, 'const {$1} = globalThis.__sensors')
   .replace(/import \{([^}]*)\} from '@zos\/user'/, 'const {$1} = globalThis.__user')
+  .replace("import * as zosUI from '@zos/ui'", 'const zosUI = globalThis.hmUI')
   .replace(/import \{([^}]*)\} from '@zos\/router'/s, (_, names) =>
     `const {${names}} = { launchApp() {}, ${names.split(',').map((n) => n.trim()).filter(Boolean).filter((n) => n !== 'launchApp').map((n) => `${n}: '${n}'`).join(', ')} }`)
   .replace("from './metrics'", `from '${pathToFileURL(join(root, 'watchface', 'metrics.js')).href}'`)

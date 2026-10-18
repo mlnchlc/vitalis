@@ -9,13 +9,19 @@ import {
   SYSTEM_APP_PRESSURE,
   SYSTEM_APP_WEATHER
 } from '@zos/router'
+import * as zosUI from '@zos/ui'
 import { M } from './metrics'
 
 // Layout follows the approved wireframe: 390 x 450, all coordinates in px.
 // Images live in assets/bip6 and are produced by tools/gen_assets.py.
 
-const NORMAL = hmUI.show_level.ONLY_NORMAL
-const AOD = hmUI.show_level.ONAL_AOD
+// Watchface widgets are documented on the global hmUI; API 2+ apps are told to
+// import @zos/ui instead. Use the global when the runtime provides it, else
+// the module, with fallbacks for the watchface-only constants.
+const hmUI = typeof globalThis.hmUI === 'object' && globalThis.hmUI !== null ? globalThis.hmUI : zosUI
+const SHOW_LEVEL = hmUI.show_level || { ONLY_NORMAL: 1, ONAL_AOD: 2 }
+const NORMAL = SHOW_LEVEL.ONLY_NORMAL
+const AOD = SHOW_LEVEL.ONAL_AOD
 const LINE = 0x2a2a30
 const RING_TRACK = 0x2a2a30
 const BAR_STEPS = 10
@@ -135,25 +141,54 @@ function dateGroup(sets, pos, show_level) {
 
 WatchFace({
   init_view() {
+    this.errors = []
     hmUI.createWidget(hmUI.widget.FILL_RECT, { x: 0, y: 0, w: 390, h: 450, color: 0x000000 })
 
-    this.buildActivity()
-    this.buildStatus()
-    this.buildBattery()
-    hline(140)
-    this.buildTime()
-    this.buildDate()
-    this.buildWeather()
-    hline(322)
-    this.buildHealthTiles()
-    hline(372)
-    this.buildEnergyStress()
-    this.buildAod()
+    // Each part is built on its own so one failure can't blank the face
+    this.safely('activity', () => this.buildActivity())
+    this.safely('status', () => this.buildStatus())
+    this.safely('battery', () => this.buildBattery())
+    this.safely('lines', () => [140, 322, 372].forEach(hline))
+    this.safely('time', () => this.buildTime())
+    this.safely('date', () => this.buildDate())
+    this.safely('weather', () => this.buildWeather())
+    this.safely('tiles', () => this.buildHealthTiles())
+    this.safely('bottom', () => this.buildEnergyStress())
+    this.safely('aod', () => this.buildAod())
+    this.safely('sensors', () => this.bindSensors())
+    this.safely('delegate', () =>
+      hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
+        resume_call: () => this.refresh()
+      })
+    )
+    this.showErrors()
+  },
 
-    this.bindSensors()
-    hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
-      resume_call: () => this.refresh()
-    })
+  safely(name, fn) {
+    try {
+      fn()
+    } catch (e) {
+      this.errors.push(`${name}: ${e && e.message ? e.message : e}`)
+    }
+  },
+
+  // Small red line at the bottom naming what failed, so a photo of the watch
+  // is enough to debug it. Nothing is drawn when everything works.
+  showErrors() {
+    if (!this.errors.length) return
+    if (!this.errorText) {
+      this.errorText = hmUI.createWidget(hmUI.widget.TEXT, {
+        x: 40,
+        y: 424,
+        w: 310,
+        h: 22,
+        text_size: 14,
+        color: 0xff4545,
+        align_h: hmUI.align.CENTER_H,
+        text: ''
+      })
+    }
+    this.errorText.setProperty(hmUI.prop.TEXT, this.errors.slice(0, 2).join(' | '))
   },
 
   // ---- top left: activity rings + stats ----
@@ -178,6 +213,7 @@ WatchFace({
 
   // ---- top right: status icons, each drawn only while its state is active ----
   buildStatus() {
+    if (!hmUI.system_status) throw new Error('no system_status')
     const icons = [
       [hmUI.system_status.DISCONNECT, 'bt_off'],
       [hmUI.system_status.DISTURB, 'dnd'],
@@ -274,7 +310,7 @@ WatchFace({
       anim_fps: 8,
       anim_size: hb.frames,
       repeat_count: 1,
-      anim_status: hmUI.anim_status.STOP,
+      anim_status: hmUI.anim_status ? hmUI.anim_status.STOP : 0,
       default_frame_index: 0,
       show_level: NORMAL
     })
@@ -398,7 +434,12 @@ WatchFace({
     this.sleep = new Sleep()
     this.time = new Time()
     this.weather = new Weather()
-    const { age } = getProfile()
+    let age = 0
+    try {
+      age = getProfile().age
+    } catch (e) {
+      // profile permission not granted: fall back to a generic max HR
+    }
     this.maxHr = age > 0 ? 220 - age : 190
 
     this.onActivity = () => this.refreshActivity()
@@ -418,14 +459,15 @@ WatchFace({
 
   // Every wrist raise / return to the face
   refresh() {
-    this.sleep.updateInfo()
+    this.safely('sleep', () => this.sleep.updateInfo())
     this.readSunTimes()
-    this.refreshActivity()
-    this.refreshBattery()
-    this.refreshStress()
-    this.refreshHealth()
-    this.refreshAccent()
-    this.heartbeat()
+    this.safely('rings', () => this.refreshActivity())
+    this.safely('batt', () => this.refreshBattery())
+    this.safely('stress', () => this.refreshStress())
+    this.safely('health', () => this.refreshHealth())
+    this.safely('accent', () => this.refreshAccent())
+    this.safely('beat', () => this.heartbeat())
+    this.showErrors()
   },
 
   refreshActivity() {
@@ -505,6 +547,7 @@ WatchFace({
 
   // ~3 s of "lub-dub" at the current heart rate
   heartbeat() {
+    if (!this.heartAnim || !hmUI.anim_status) return
     const bpm = this.heartRate.getLast() > 0 ? this.heartRate.getLast() : 72
     const fps = clamp(Math.round((M.heartbeat.frames * bpm) / 60), 4, 24)
     const beats = Math.max(1, Math.round((3 * bpm) / 60))
@@ -524,12 +567,14 @@ WatchFace({
   },
 
   onDestroy() {
-    this.step.offChange(this.onActivity)
-    this.calorie.offChange(this.onActivity)
-    this.stand.offChange(this.onActivity)
-    this.battery.offChange(this.onBattery)
-    this.stress.offChange(this.onStress)
-    this.heartRate.offLastChange(this.onHealth)
-    this.bloodOxygen.offChange(this.onHealth)
+    this.safely('destroy', () => {
+      this.step.offChange(this.onActivity)
+      this.calorie.offChange(this.onActivity)
+      this.stand.offChange(this.onActivity)
+      this.battery.offChange(this.onBattery)
+      this.stress.offChange(this.onStress)
+      this.heartRate.offLastChange(this.onHealth)
+      this.bloodOxygen.offChange(this.onHealth)
+    })
   }
 })
