@@ -51,6 +51,10 @@ TILE_TINTS = {'orange': '#ff9f43', 'red': '#ff4545', 'amber': '#ffb020'}
 WEEK_PHASES = {'dawn': '#ffc46b', 'day': ORANGE, 'dusk': '#ff5e7e', 'night': '#7b8cff'}
 
 SS = 4  # supersampling factor for icons and shapes
+# Transparent rows above and below every text image. The watch drops the top
+# pixel rows of an image whose glyphs touch its top edge, which shaved the
+# tops off every digit.
+PAD = 3
 
 # Layout (cohesive version): 24 px margins, everything on a 4 px grid.
 # Date centred on y 274, weather (four equal columns over x 24..366) on
@@ -91,14 +95,14 @@ def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None,
     if top is None:
         probe = '0123456789%' + ('°' if 'deg' in extras and not compact_deg else '')
         top = font.getbbox(probe, anchor='ls')[1]  # negative: distance above baseline
-    h = -top + 1
+    h = -top + 1 + 2 * PAD  # transparent margin above and below the glyphs
     digit_w = max(math.ceil(font.getlength(c)) for c in '0123456789') + pad_x
 
     def glyph(text, w=None):
         w = w or math.ceil(font.getlength(text)) + pad_x
         mask = Image.new('L', (w, h), 0)
         tw = font.getlength(text)
-        ImageDraw.Draw(mask).text(((w - tw) / 2, h - 1), text, font=font, fill=255, anchor='ls')
+        ImageDraw.Draw(mask).text(((w - tw) / 2, h - 1 - PAD), text, font=font, fill=255, anchor='ls')
         return tint(mask, color)
 
     m = {'h': h, 'digit_w': digit_w, 'cap': -font.getbbox('0', anchor='ls')[1]}
@@ -112,7 +116,7 @@ def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None,
             w = math.ceil(font.getlength('°')) + pad_x
             mask = Image.new('L', (w, h), 0)
             dtop = font.getbbox('°', anchor='ls')[1]
-            ImageDraw.Draw(mask).text((0, h - 1 + (top - dtop)), '°', font=font, fill=255, anchor='ls')
+            ImageDraw.Draw(mask).text((0, h - 1 - PAD + (top - dtop)), '°', font=font, fill=255, anchor='ls')
             m[key] = save(tint(mask, color), f'font/{name}/deg.png').width
             continue
         m[key] = save(glyph(EXTRAS[key]), f'font/{name}/{key}.png').width
@@ -130,13 +134,13 @@ def word_set(name, words, size, color, align='left', top=None, weight='Bold'):
     font = ImageFont.truetype(BARLOW[weight], size)
     if top is None:
         top = font.getbbox('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', anchor='ls')[1]
-    h = -top + 1
+    h = -top + 1 + 2 * PAD
     w = max(math.ceil(font.getlength(word)) for word in words) + 1
     for i, word in enumerate(words):
         mask = Image.new('L', (w, h), 0)
         tw = font.getlength(word)
         x = {'right': w - tw, 'center': (w - tw) / 2}.get(align, 0)
-        ImageDraw.Draw(mask).text((x, h - 1), word, font=font, fill=255, anchor='ls')
+        ImageDraw.Draw(mask).text((x, h - 1 - PAD), word, font=font, fill=255, anchor='ls')
         save(tint(mask, color), f'date/{name}_{i}.png')
     metrics[name] = {'h': h, 'w': w}
 
@@ -244,7 +248,7 @@ def app_icon(size=124):
 
 def cap_mid(y, m):
     """y of the middle of the digits for a set drawn at y (icons centre on it)."""
-    return y + m['h'] - 1 - m['cap'] / 2
+    return y + m['h'] - 1 - PAD - m['cap'] / 2
 
 
 def date_row():

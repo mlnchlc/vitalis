@@ -40,7 +40,7 @@ const RIGHT_X = 244
 const RIGHT_W = 118
 const BATTERY_CY = 78 // middle of the rings
 const DIVIDERS = [136, 324, 372]
-const TIME_Y = 144
+const TIME_Y = 141 // digit images carry 3 px of padding above the glyphs
 
 const digits = (set) => Array.from({ length: 10 }, (_, i) => `font/${set}/${i}.png`)
 const words = (set, n) => Array.from({ length: n }, (_, i) => `date/${set}_${i}.png`)
