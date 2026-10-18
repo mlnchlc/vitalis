@@ -258,10 +258,10 @@ def weather_row():
     mid = cap_mid(y, r)
     col_w = (MARGIN_X1 - MARGIN_X0) / 4
     items = [  # key, icon, icon size, typical value width, slot width
-        ('temp', 'temp', 20, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
-        ('high', 'high', 11, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
-        ('low', 'low', 11, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
-        ('hum', 'humidity', 20, 2 * avg + r['pct'], 3 * dw + r['pct']),
+        ('temp', 'temp', 24, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('high', 'high', 13, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('low', 'low', 13, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('hum', 'humidity', 24, 2 * avg + r['pct'], 3 * dw + r['pct']),
     ]
     lay = {}
     for i, (key, icon_name, size, typical, slot) in enumerate(items):
@@ -308,7 +308,8 @@ def write_metrics_js():
 def main():
     os.makedirs(OUT, exist_ok=True)
 
-    # Type: three tiers. Hero = time, primary = 28 (battery 40), secondary = 22.
+    # Type: three tiers. Hero = time, primary = 28 (battery 40; also weather and
+    # vitals, so the bottom three rows match), secondary = 22 (stats, date).
     font_set('time', 158, WHITE, ('colon',), pad_x=0)
     font_set('batt', 40, WHITE, ('pct',))
     for tint_name, c in (('amber', WARN), ('red', BAD)):
@@ -319,7 +320,7 @@ def main():
     for zone, c in STRESS_ZONES.items():
         font_set(f'tile_{zone}', 28, c, proportional=True)
     font_set('stat', 22, WHITE, ('dot', 'slash'))
-    font_set('wx', 22, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, proportional=True)
+    font_set('wx', 28, WHITE, ('deg', 'pct', 'minus', 'invalid'), pad_x=0, proportional=True)
     # Date: day/date/month share one height so they share a baseline
     date_top = shared_top(22)
     for phase, c in WEEK_PHASES.items():
@@ -339,10 +340,10 @@ def main():
     icon('cal', 'local_fire_department', 20, CAL)
     icon('stand', 'accessibility_new', 20, STAND)
     icon('dist', 'distance', 20, DIST)
-    icon('temp', 'device_thermostat', 20, TEMP)
-    icon('humidity', 'humidity_percentage', 20, HUMID)
-    triangle('high', 11, '#ff6b5a', up=True)
-    triangle('low', 11, '#4da3ff', up=False)
+    icon('temp', 'device_thermostat', 24, TEMP)
+    icon('humidity', 'humidity_percentage', 24, HUMID)
+    triangle('high', 13, '#ff6b5a', up=True)
+    triangle('low', 13, '#4da3ff', up=False)
     icon('battery', 'battery_horiz_075', 24, GOOD)
     icon('hr', 'ecg_heart', 24, HR)
     heartbeat_frames(24)
