@@ -2,7 +2,7 @@
   "configVersion": "v3",
   "app": {
     "appId": 1000001,
-    "appName": "Bip6 Face",
+    "appName": "Bip6 Health",
     "appType": "watchface",
     "version": {
       "code": 1,
@@ -10,11 +10,17 @@
     },
     "icon": "icon.png",
     "vender": "zepp",
-    "description": "A simple digital watchface for the Amazfit Bip 6"
+    "description": "Health and time focused watchface for the Amazfit Bip 6"
   },
   "permissions": [
+    "data:user.hd.step",
+    "data:user.hd.calorie",
+    "data:user.hd.stand",
+    "data:user.hd.distance",
     "data:user.hd.heart_rate",
-    "data:user.hd.step"
+    "data:user.hd.spo2",
+    "data:user.hd.sleep",
+    "data:user.hd.stress"
   ],
   "runtime": {
     "apiVersion": {
@@ -44,7 +50,7 @@
   },
   "i18n": {
     "en-US": {
-      "appName": "Bip6 Face"
+      "appName": "Bip6 Health"
     }
   },
   "defaultLanguage": "en-US"

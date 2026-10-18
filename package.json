@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "Zepp OS watchface for the Amazfit Bip 6",
   "private": true,
+  "type": "module",
   "scripts": {
+    "assets": "python3 tools/gen_assets.py",
+    "preview": "node tools/preview/record.mjs > preview/widgets.json && python3 tools/preview/render.py preview/widgets.json",
     "dev": "zeus dev",
-    "preview": "zeus preview",
     "build": "zeus build"
   },
   "devDependencies": {
