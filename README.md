@@ -66,12 +66,13 @@ tools/preview/         stub renderer for previews
 
 ## Known limits
 
-- **HybridCharge**: Zepp added it as a watchface data field in 2026, but its `data_type`
-  constant isn't in the published API reference. The face looks for a matching
-  `hmUI.data_type` key at runtime (`HYBRID…` / `BIO_CHARGE…`). If the firmware has none,
-  it shows `--` with an empty bar. The Bip 6 wasn't on Zepp's initial HybridCharge rollout list.
-- The HybridCharge bar relies on `IMG_LEVEL` honouring `type`, which Watchface Maker uses
-  but the API reference doesn't document.
+- **HybridCharge** is read from `data_type.BIO_CHARGE` (its pre-2026 name, confirmed on a
+  Bip 6). The bar relies on `IMG_LEVEL` honouring `type`, which Watchface Maker uses but the
+  API reference doesn't document.
+- **Always-on** needs `"lockscreen": 1` in `app.json`; without it the watch uses its default
+  AOD. On the watch, set Always-On Display to follow the watch face.
+- The Bip 6 has no global `hmUI`; widgets come from `@zos/ui`. An empty-text `TEXT_IMG`
+  draws "0", and `TEXT_IMG` appends its unit image even to set text.
 - The heartbeat retimes `IMG_ANIM` with `setProperty(prop.MORE, { anim_fps, repeat_count })`
   before each start. If the firmware ignores that, it pulses at a fixed 8 fps instead.
 - Not yet run on a real watch or in the simulator. `zeus build` compiles cleanly.

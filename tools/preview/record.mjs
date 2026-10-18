@@ -31,7 +31,7 @@ const enumOf = (names) => Object.fromEntries(names.map((n) => [n, n]))
 
 globalThis.hmUI = {
   widget: enumOf(['IMG', 'TEXT', 'TEXT_IMG', 'FILL_RECT', 'BUTTON', 'ARC_PROGRESS', 'IMG_TIME', 'IMG_WEEK', 'IMG_DATE', 'IMG_LEVEL', 'IMG_STATUS', 'IMG_ANIM', 'WIDGET_DELEGATE']),
-  data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'UVI', 'HYBRID_CHARGE']),
+  data_type: enumOf(['STEP', 'CAL', 'DISTANCE', 'BATTERY', 'WEATHER_CURRENT', 'WEATHER_HIGH', 'WEATHER_LOW', 'HUMIDITY', 'HEART', 'SPO2', 'SLEEP', 'STRESS', 'UVI', 'BIO_CHARGE']),
   align: enumOf(['LEFT', 'RIGHT', 'CENTER_H']),
   prop: enumOf(['TEXT', 'SRC', 'MORE', 'VISIBLE', 'ANIM_STATUS']),
   anim_status: enumOf(['START', 'PAUSE', 'RESUME', 'STOP']),
@@ -90,6 +90,10 @@ const sensors = {
   }
 }
 globalThis.__user = { getProfile: () => ({ age: SAMPLE.age }) }
+// PREVIEW_SCENE=aod starts the face as the always-on screen
+globalThis.__app = { getScene: () => (process.env.PREVIEW_SCENE === 'aod' ? 4 : 2), SCENE_AOD: 4 }
+// PREVIEW_NO_SHOW_LEVEL=1 mimics the Bip 6, whose @zos/ui has no show_level
+if (process.env.PREVIEW_NO_SHOW_LEVEL) delete globalThis.hmUI.show_level
 globalThis.__sensors = sensors
 
 // Swap the platform imports for the stubs above, keep everything else as is.
@@ -99,6 +103,7 @@ src = src
   .replace(/import \{([^}]*)\} from '@zos\/sensor'/, 'const {$1} = globalThis.__sensors')
   .replace(/import \{([^}]*)\} from '@zos\/user'/, 'const {$1} = globalThis.__user')
   .replace("import * as zosUI from '@zos/ui'", 'const zosUI = globalThis.hmUI')
+  .replace(/import \{([^}]*)\} from '@zos\/app'/, 'const {$1} = globalThis.__app')
   .replace(/import \{([^}]*)\} from '@zos\/router'/s, (_, names) =>
     `const {${names}} = { launchApp() {}, ${names.split(',').map((n) => n.trim()).filter(Boolean).filter((n) => n !== 'launchApp').map((n) => `${n}: '${n}'`).join(', ')} }`)
   .replace("from './metrics'", `from '${pathToFileURL(join(root, 'watchface', 'metrics.js')).href}'`)

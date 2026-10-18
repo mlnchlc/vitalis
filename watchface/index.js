@@ -10,6 +10,7 @@ import {
   SYSTEM_APP_WEATHER
 } from '@zos/router'
 import * as zosUI from '@zos/ui'
+import { getScene, SCENE_AOD } from '@zos/app'
 import { M } from './metrics'
 
 // Layout follows the approved wireframe: 390 x 450, all coordinates in px.
@@ -19,9 +20,12 @@ import { M } from './metrics'
 // import @zos/ui instead. Use the global when the runtime provides it, else
 // the module, with fallbacks for the watchface-only constants.
 const hmUI = typeof globalThis.hmUI === 'object' && globalThis.hmUI !== null ? globalThis.hmUI : zosUI
-const SHOW_LEVEL = hmUI.show_level || { ONLY_NORMAL: 1, ONAL_AOD: 2 }
-const NORMAL = SHOW_LEVEL.ONLY_NORMAL
-const AOD = SHOW_LEVEL.ONAL_AOD
+// show_level marks which widgets draw in normal and always-on mode (needs
+// "lockscreen": 1 in app.json). Guard for runtimes without it; the face also
+// checks getScene() and builds only the dim layout in the always-on scene.
+const SHOW_LEVEL = hmUI.show_level && hmUI.show_level.ONAL_AOD !== undefined ? hmUI.show_level : null
+const NORMAL = SHOW_LEVEL ? SHOW_LEVEL.ONLY_NORMAL : undefined
+const AOD = SHOW_LEVEL ? SHOW_LEVEL.ONAL_AOD : undefined
 const LINE = 0x2a2a30
 const RING_TRACK = 0x2a2a30
 const BAR_STEPS = 10
@@ -41,27 +45,46 @@ const HR_ELEVATED = 0.6 // fraction of max HR (220 - age) where HR turns orange
 const HR_HIGH = 0.8 // ... and red
 const stressZone = (v) => (v < 40 ? 'relaxed' : v < 60 ? 'normal' : v < 80 ? 'medium' : 'high')
 
-// HybridCharge is a newer data field; its data_type constant isn't in the
-// published API reference yet, so look it up by name at runtime.
-function findDataType(pattern) {
-  const key = Object.keys(hmUI.data_type).find((k) => pattern.test(k))
-  return key === undefined ? undefined : hmUI.data_type[key]
+// HybridCharge (Amazfit's 2026 rename of BioCharge) isn't in the published
+// API reference. On the Bip 6 it is data_type.BIO_CHARGE; later firmware may
+// rename it, so try that first and then the likely new names.
+const HYBRID_NAMES = ['BIO_CHARGE', 'HYBRID_CHARGE', 'HYBRIDCHARGE', 'BIOCHARGE']
+function findDataType(names) {
+  const dt = hmUI.data_type || {}
+  const name = names.find((n) => dt[n] !== undefined)
+  return name === undefined ? undefined : dt[name]
+}
+
+function create(type, opts = {}) {
+  if (opts.show_level === undefined) {
+    const { show_level, ...rest } = opts
+    return hmUI.createWidget(type, rest)
+  }
+  return hmUI.createWidget(type, opts)
+}
+
+function inAodScene() {
+  try {
+    return getScene() === SCENE_AOD
+  } catch (e) {
+    return false
+  }
 }
 
 function img(x, y, src, show_level = NORMAL) {
-  return hmUI.createWidget(hmUI.widget.IMG, { x, y, src, show_level })
+  return create(hmUI.widget.IMG, { x, y, src, show_level })
 }
 
 function hline(y) {
-  hmUI.createWidget(hmUI.widget.FILL_RECT, { x: 24, y, w: 342, h: 1, color: LINE, show_level: NORMAL })
+  create(hmUI.widget.FILL_RECT, { x: 24, y, w: 342, h: 1, color: LINE, show_level: NORMAL })
 }
 
 function vline(x, y, h) {
-  hmUI.createWidget(hmUI.widget.FILL_RECT, { x, y, w: 1, h, color: LINE, show_level: NORMAL })
+  create(hmUI.widget.FILL_RECT, { x, y, w: 1, h, color: LINE, show_level: NORMAL })
 }
 
 function value(set, opts) {
-  return hmUI.createWidget(hmUI.widget.TEXT_IMG, {
+  return create(hmUI.widget.TEXT_IMG, {
     font_array: digits(set),
     h_space: 0,
     align_h: hmUI.align.LEFT,
@@ -72,7 +95,7 @@ function value(set, opts) {
 }
 
 function tap(x, y, w, h, overlay, appId) {
-  hmUI.createWidget(hmUI.widget.BUTTON, {
+  create(hmUI.widget.BUTTON, {
     x,
     y,
     w,
@@ -87,8 +110,8 @@ function tap(x, y, w, h, overlay, appId) {
 
 function ring(cx, cy, radius, color) {
   const base = { center_x: cx, center_y: cy, radius, start_angle: -90, end_angle: 270, line_width: 9, show_level: NORMAL }
-  hmUI.createWidget(hmUI.widget.ARC_PROGRESS, { ...base, color: RING_TRACK, level: 100 })
-  const arc = hmUI.createWidget(hmUI.widget.ARC_PROGRESS, { ...base, color, level: 0 })
+  create(hmUI.widget.ARC_PROGRESS, { ...base, color: RING_TRACK, level: 100 })
+  const arc = create(hmUI.widget.ARC_PROGRESS, { ...base, color, level: 0 })
   return (level) => arc.setProperty(hmUI.prop.MORE, { ...base, color, level: Math.round(level) })
 }
 
@@ -116,7 +139,7 @@ function tintedValue(sets, optsFor, invalidSrc, x, y) {
 // Day of week, day (whole pre-spaced images 1-31) and month, at fixed spots
 function dateGroup(sets, pos, show_level) {
   if (sets.week) {
-    hmUI.createWidget(hmUI.widget.IMG_WEEK, {
+    create(hmUI.widget.IMG_WEEK, {
       x: pos.week.x,
       y: pos.week.y,
       week_en: words(sets.week, 7),
@@ -125,7 +148,7 @@ function dateGroup(sets, pos, show_level) {
       show_level
     })
   }
-  hmUI.createWidget(hmUI.widget.IMG_DATE, {
+  create(hmUI.widget.IMG_DATE, {
     day_startX: pos.day.x,
     day_startY: pos.day.y,
     day_is_character: true,
@@ -134,7 +157,7 @@ function dateGroup(sets, pos, show_level) {
     day_tc_array: words(sets.day, 31),
     show_level
   })
-  hmUI.createWidget(hmUI.widget.IMG_DATE, {
+  create(hmUI.widget.IMG_DATE, {
     month_startX: pos.month.x,
     month_startY: pos.month.y,
     month_is_character: true,
@@ -148,7 +171,14 @@ function dateGroup(sets, pos, show_level) {
 WatchFace({
   init_view() {
     this.errors = []
-    hmUI.createWidget(hmUI.widget.FILL_RECT, { x: 0, y: 0, w: 390, h: 450, color: 0x000000 })
+    create(hmUI.widget.FILL_RECT, { x: 0, y: 0, w: 390, h: 450, color: 0x000000 })
+
+    // Started for the always-on screen: draw only the dim layout
+    if (inAodScene()) {
+      this.safely('aod', () => this.buildAod())
+      this.safely('aodBattery', () => this.bindAodBattery())
+      return
+    }
 
     // Each part is built on its own so one failure can't blank the face
     this.safely('activity', () => this.buildActivity())
@@ -160,10 +190,11 @@ WatchFace({
     this.safely('weather', () => this.buildWeather())
     this.safely('tiles', () => this.buildHealthTiles())
     this.safely('bottom', () => this.buildEnergyStress())
-    this.safely('aod', () => this.buildAod())
+    // With show_level available, the always-on layout rides along hidden
+    if (SHOW_LEVEL) this.safely('aod', () => this.buildAod())
     this.safely('sensors', () => this.bindSensors())
     this.safely('delegate', () =>
-      hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
+      create(hmUI.widget.WIDGET_DELEGATE, {
         resume_call: () => this.refresh()
       })
     )
@@ -183,7 +214,7 @@ WatchFace({
   showErrors() {
     if (!this.errors.length) return
     if (!this.errorText) {
-      this.errorText = hmUI.createWidget(hmUI.widget.TEXT, {
+      this.errorText = create(hmUI.widget.TEXT, {
         x: 40,
         y: 424,
         w: 310,
@@ -227,7 +258,7 @@ WatchFace({
       [hmUI.system_status.LOCK, 'lock']
     ]
     icons.forEach(([type, name], i) => {
-      hmUI.createWidget(hmUI.widget.IMG_STATUS, {
+      create(hmUI.widget.IMG_STATUS, {
         x: 244 + Math.round(i * (118 - 24) / 3),
         y: 30,
         type,
@@ -253,7 +284,7 @@ WatchFace({
   // ---- middle: time ----
   buildTime() {
     const width = 4 * M.time.digit_w + M.time.colon
-    hmUI.createWidget(hmUI.widget.IMG_TIME, {
+    create(hmUI.widget.IMG_TIME, {
       hour_zero: 1,
       hour_startX: Math.round((390 - width) / 2),
       hour_startY: 150,
@@ -307,7 +338,7 @@ WatchFace({
     const unitsIn = (set) => units(`font/${set}/pct.png`)
     const hr = M.tiles.hr
     const hb = M.heartbeat
-    this.heartAnim = hmUI.createWidget(hmUI.widget.IMG_ANIM, {
+    this.heartAnim = create(hmUI.widget.IMG_ANIM, {
       x: hr.iconX - hb.pad,
       y: hr.iconY - hb.pad,
       anim_path: 'anim/hr',
@@ -354,10 +385,10 @@ WatchFace({
     const cols = [36, 204]
 
     img(cols[0], iconY, 'icon/hybrid.png')
-    const hybridType = findDataType(/HYBRID|BIO_?CHARGE/i)
+    const hybridType = findDataType(HYBRID_NAMES)
     if (hybridType !== undefined) {
       value('bot', { x: cols[0] + 32, y: valueY, w: 46, type: hybridType, invalid_image: 'font/bot/invalid.png' })
-      hmUI.createWidget(hmUI.widget.IMG_LEVEL, {
+      create(hmUI.widget.IMG_LEVEL, {
         x: cols[0] + 82,
         y: barY,
         image_array: Array.from({ length: BAR_STEPS + 1 }, (_, i) => `bar/hybrid/${i}.png`),
@@ -382,7 +413,7 @@ WatchFace({
   // ---- always-on display: dim time, date, battery ----
   buildAod() {
     const width = 4 * M.aod.digit_w + M.aod.colon
-    hmUI.createWidget(hmUI.widget.IMG_TIME, {
+    create(hmUI.widget.IMG_TIME, {
       hour_zero: 1,
       hour_startX: Math.round((390 - width) / 2),
       hour_startY: 150,
@@ -414,7 +445,7 @@ WatchFace({
     const battW = 46 + 8 + 2 * M.aod_batt.digit_w + M.aod_batt.pct
     const bx = Math.round((390 - battW) / 2)
     this.aodBatteryBar = img(bx, 336, barSrc('aod_battery', 0), AOD)
-    hmUI.createWidget(hmUI.widget.TEXT_IMG, {
+    create(hmUI.widget.TEXT_IMG, {
       x: bx + 54,
       y: 342 - Math.round(M.aod_batt.h / 2),
       w: 3 * M.aod_batt.digit_w + M.aod_batt.pct,
@@ -487,8 +518,15 @@ WatchFace({
 
   refreshBattery() {
     const level = this.battery.getCurrent()
-    this.batteryBar.setProperty(hmUI.prop.SRC, barSrc('battery', level))
-    this.aodBatteryBar.setProperty(hmUI.prop.SRC, barSrc('aod_battery', level))
+    if (this.batteryBar) this.batteryBar.setProperty(hmUI.prop.SRC, barSrc('battery', level))
+    if (this.aodBatteryBar) this.aodBatteryBar.setProperty(hmUI.prop.SRC, barSrc('aod_battery', level))
+  },
+
+  bindAodBattery() {
+    this.battery = new Battery()
+    this.onBattery = () => this.refreshBattery()
+    this.battery.onChange(this.onBattery)
+    this.refreshBattery()
   },
 
   refreshStress() {
@@ -573,14 +611,16 @@ WatchFace({
   },
 
   onDestroy() {
+    // Only the sensors this mode created exist (the always-on scene has just battery)
+    const off = (sensor, fn, method = 'offChange') => sensor && fn && sensor[method](fn)
     this.safely('destroy', () => {
-      this.step.offChange(this.onActivity)
-      this.calorie.offChange(this.onActivity)
-      this.stand.offChange(this.onActivity)
-      this.battery.offChange(this.onBattery)
-      this.stress.offChange(this.onStress)
-      this.heartRate.offLastChange(this.onHealth)
-      this.bloodOxygen.offChange(this.onHealth)
+      off(this.step, this.onActivity)
+      off(this.calorie, this.onActivity)
+      off(this.stand, this.onActivity)
+      off(this.battery, this.onBattery)
+      off(this.stress, this.onStress)
+      off(this.heartRate, this.onHealth, 'offLastChange')
+      off(this.bloodOxygen, this.onHealth)
     })
   }
 })
