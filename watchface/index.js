@@ -40,7 +40,6 @@ const RIGHT_X = 244
 const RIGHT_W = 118
 const BATTERY_CY = 78 // middle of the rings
 const DIVIDERS = [136, 324, 372]
-const AOD_STATS_CY = 304 // always-on steps/calories row
 const TIME_Y = 141 // digit images carry 3 px of padding above the glyphs
 
 const digits = (set) => Array.from({ length: 10 }, (_, i) => `font/${set}/${i}.png`)
@@ -192,12 +191,12 @@ function dateGroup(sets, pos, show_level) {
   })
 }
 
-function bigTime(set, show_level) {
+function bigTime(set, show_level, y = TIME_Y) {
   const width = 4 * M[set].digit_w + M[set].colon
   create(hmUI.widget.IMG_TIME, {
     hour_zero: 1,
     hour_startX: Math.round((390 - width) / 2),
-    hour_startY: TIME_Y,
+    hour_startY: y,
     hour_array: digits(set),
     hour_space: 0,
     hour_unit_sc: `font/${set}/colon.png`,
@@ -220,7 +219,6 @@ WatchFace({
     // Started for the always-on screen: draw only the dim layout
     if (inAodScene()) {
       this.safely('aod', () => this.buildAod())
-      this.safely('aodBattery', () => this.bindAodBattery())
       return
     }
 
@@ -450,39 +448,41 @@ WatchFace({
     this.stressIcon = img(C.stress.iconX, C.stress.iconY, 'icon/stress.png')
   },
 
-  // ---- always-on display: dim time, date, battery at the same positions ----
+  // ---- always-on display: hollow time, spaced date, steps/kcal, battery % ----
+  // Deliberately different from the normal screen (outline digits, higher and
+  // smaller) so the dim/wake switch reads as a transition.
   buildAod() {
-    bigTime('aod', AOD)
-    dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, M.dateRow, AOD)
+    const A = M.aodLayout
+    bigTime('aod', AOD, A.timeY)
+    dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, A, AOD)
 
     // Steps and calories, dim, centred under the date
     const st = M.aod_stat
+    const cy = A.statsCy
     const stepsW = 20 + 6 + 5 * st.digit_w
     const calW = 20 + 6 + 4 * st.digit_w
-    const sx = Math.round((390 - (stepsW + 24 + calW)) / 2)
-    const sy = AOD_STATS_CY - Math.round(st.h / 2)
-    img(sx, AOD_STATS_CY - 10, 'icon/aod_steps.png', AOD)
+    const sx = Math.round((390 - (stepsW + 28 + calW)) / 2)
+    const sy = cy - Math.round(st.h / 2)
+    img(sx, cy - 10, 'icon/aod_steps.png', AOD)
     create(hmUI.widget.TEXT_IMG, {
       x: sx + 26, y: sy, w: 5 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
       align_h: hmUI.align.LEFT, type: hmUI.data_type.STEP, show_level: AOD
     })
-    img(sx + stepsW + 24, AOD_STATS_CY - 10, 'icon/aod_cal.png', AOD)
+    img(sx + stepsW + 28, cy - 10, 'icon/aod_cal.png', AOD)
     create(hmUI.widget.TEXT_IMG, {
-      x: sx + stepsW + 24 + 26, y: sy, w: 4 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
+      x: sx + stepsW + 28 + 26, y: sy, w: 4 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
       align_h: hmUI.align.LEFT, type: hmUI.data_type.CAL, show_level: AOD
     })
 
-    const battW = 46 + 8 + 2 * M.aod_batt.digit_w + M.aod_batt.pct
-    const bx = Math.round((390 - battW) / 2)
-    this.aodBatteryBar = img(bx, 336, barSrc('aod_battery', 0), AOD)
+    // Battery %: small, dark grey, centred, no bar
     create(hmUI.widget.TEXT_IMG, {
-      x: bx + 54,
-      y: 342 - Math.round(M.aod_batt.h / 2),
-      w: 3 * M.aod_batt.digit_w + M.aod_batt.pct,
+      x: 0,
+      y: A.battCy - Math.round(M.aod_batt.h / 2),
+      w: 390,
       h: M.aod_batt.h,
       font_array: digits('aod_batt'),
       h_space: 0,
-      align_h: hmUI.align.LEFT,
+      align_h: hmUI.align.CENTER_H,
       type: hmUI.data_type.BATTERY,
       ...units('font/aod_batt/pct.png'),
       show_level: AOD
@@ -524,13 +524,6 @@ WatchFace({
     this.refresh()
   },
 
-  bindAodBattery() {
-    this.battery = new Battery()
-    this.onBattery = () => this.refreshBattery()
-    this.battery.onChange(this.onBattery)
-    this.refreshBattery()
-  },
-
   // Every wrist raise / return to the face
   refresh() {
     this.safely('sleep', () => this.sleep.updateInfo())
@@ -564,7 +557,6 @@ WatchFace({
       const set = level <= BATTERY_CRITICAL ? 'batt_red' : level <= BATTERY_LOW ? 'batt_amber' : 'batt'
       this.showBattery(set, String(level))
     }
-    if (this.aodBatteryBar) this.aodBatteryBar.setProperty(hmUI.prop.SRC, barSrc('aod_battery', level))
   },
 
   refreshStress() {

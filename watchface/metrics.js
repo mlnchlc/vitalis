@@ -131,23 +131,23 @@ export const M = {
     "w": 22
   },
   "aod": {
-    "h": 119,
-    "digit_w": 73,
-    "cap": 112,
-    "avg_w": 73.0,
-    "colon": 40
+    "h": 104,
+    "digit_w": 63,
+    "cap": 97,
+    "avg_w": 63.0,
+    "colon": 35
   },
   "aod_week": {
     "h": 26,
-    "w": 37
+    "w": 43
   },
   "aod_month": {
     "h": 26,
-    "w": 35
+    "w": 41
   },
   "aod_day": {
     "h": 26,
-    "w": 22
+    "w": 25
   },
   "aod_batt": {
     "h": 23,
@@ -179,6 +179,23 @@ export const M = {
       "x": 213,
       "y": 261
     }
+  },
+  "aodLayout": {
+    "timeY": 100,
+    "week": {
+      "x": 126,
+      "y": 219
+    },
+    "day": {
+      "x": 183,
+      "y": 219
+    },
+    "month": {
+      "x": 222,
+      "y": 219
+    },
+    "statsCy": 280,
+    "battCy": 357
   },
   "weatherRow": {
     "tempIcon": {

@@ -13,7 +13,7 @@ import json
 import math
 import os
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS = os.path.join(ROOT, 'tools', 'fonts')
@@ -24,6 +24,8 @@ SYMBOLS = os.path.join(FONTS, 'MaterialSymbolsRounded.ttf')
 
 WHITE = '#ffffff'
 AOD_GRAY = '#7a7a80'
+AOD_OUTLINE = '#8d8d94'
+AOD_DIM = '#5a5a62'
 ORANGE = '#ff8a1f'
 STEPS = '#2ee6ff'
 CAL = '#ff5a36'
@@ -87,10 +89,11 @@ def tint(mask, color):
 EXTRAS = {'colon': ':', 'dot': '.', 'slash': '/', 'pct': '%', 'deg': '°', 'minus': '-', 'invalid': '--'}
 
 
-def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None, proportional=False, compact_deg=False):
+def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None, proportional=False, compact_deg=False, outline=0):
     """top: shared distance above the baseline (negative) so several sets line up.
     proportional: each digit keeps its own width (no gap around "1"); slots are
-    still sized from the widest digit."""
+    still sized from the widest digit. outline: stroke width in px; draws hollow
+    glyphs (rendered 4x and eroded, so the stroke is smooth)."""
     font = ImageFont.truetype(BARLOW[weight], size)
     if top is None:
         probe = '0123456789%' + ('°' if 'deg' in extras and not compact_deg else '')
@@ -100,8 +103,15 @@ def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None,
 
     def glyph(text, w=None):
         w = w or math.ceil(font.getlength(text)) + pad_x
-        mask = Image.new('L', (w, h), 0)
         tw = font.getlength(text)
+        if outline:
+            big_font = ImageFont.truetype(BARLOW[weight], size * SS)
+            filled = Image.new('L', (w * SS, h * SS), 0)
+            ImageDraw.Draw(filled).text(((w - tw) / 2 * SS, (h - 1 - PAD) * SS), text, font=big_font, fill=255, anchor='ls')
+            inner = filled.filter(ImageFilter.MinFilter(2 * outline * SS + 1))
+            ring = ImageChops.subtract(filled, inner)
+            return tint(ring.resize((w, h), Image.LANCZOS), color)
+        mask = Image.new('L', (w, h), 0)
         ImageDraw.Draw(mask).text(((w - tw) / 2, h - 1 - PAD), text, font=font, fill=255, anchor='ls')
         return tint(mask, color)
 
@@ -123,24 +133,32 @@ def font_set(name, size, color, extras=(), weight='SemiBold', pad_x=1, top=None,
     metrics[name] = m
 
 
-def day_set(name, size, color, top):
+def day_set(name, size, color, top, tracking=0):
     """Days 1-31 as whole words (IMG_DATE day_is_character) so each number is
     properly spaced, centred in one shared width so the month can sit at fixed x."""
-    word_set(name, [str(d) for d in range(1, 32)], size, color, align='center', top=top, weight='Bold')
+    word_set(name, [str(d) for d in range(1, 32)], size, color, align='center', top=top, weight='Bold', tracking=tracking)
 
 
-def word_set(name, words, size, color, align='left', top=None, weight='Bold'):
-    """All images in a set share one width so neighbours can sit at fixed x."""
+def word_set(name, words, size, color, align='left', top=None, weight='Bold', tracking=0):
+    """All images in a set share one width so neighbours can sit at fixed x.
+    tracking: extra px between letters."""
     font = ImageFont.truetype(BARLOW[weight], size)
     if top is None:
         top = font.getbbox('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', anchor='ls')[1]
     h = -top + 1 + 2 * PAD
-    w = max(math.ceil(font.getlength(word)) for word in words) + 1
+
+    def width(word):
+        return sum(font.getlength(c) for c in word) + tracking * (len(word) - 1)
+
+    w = max(math.ceil(width(word)) for word in words) + 1
     for i, word in enumerate(words):
         mask = Image.new('L', (w, h), 0)
-        tw = font.getlength(word)
+        tw = width(word)
         x = {'right': w - tw, 'center': (w - tw) / 2}.get(align, 0)
-        ImageDraw.Draw(mask).text((x, h - 1 - PAD), word, font=font, fill=255, anchor='ls')
+        d = ImageDraw.Draw(mask)
+        for c in word:
+            d.text((x, h - 1 - PAD), c, font=font, fill=255, anchor='ls')
+            x += font.getlength(c) + tracking
         save(tint(mask, color), f'date/{name}_{i}.png')
     metrics[name] = {'h': h, 'w': w}
 
@@ -264,6 +282,24 @@ def date_row():
     }
 
 
+def aod_layout():
+    """Always-on positions (screen px): time centred on y 151, date on y 232,
+    steps/calories row on y 280, battery % on y 357."""
+    t, wk, mo, day = metrics['aod'], metrics['aod_week'], metrics['aod_month'], metrics['aod_day']
+    gap = 14
+    total = wk['w'] + gap + day['w'] + gap + mo['w']
+    x = round((390 - total) / 2)
+    dy = round(232 - wk['h'] / 2)
+    metrics['aodLayout'] = {
+        'timeY': round(151 - (t['h'] - 1 - PAD - t['cap'] / 2)),
+        'week': {'x': x, 'y': dy},
+        'day': {'x': x + wk['w'] + gap, 'y': dy},
+        'month': {'x': x + wk['w'] + gap + day['w'] + gap, 'y': dy},
+        'statsCy': 280,
+        'battCy': 357,
+    }
+
+
 def weather_row():
     """Four equal columns: temp, high, low, humidity. Each icon+value pair is
     centred in its column for a typical value; values are left-aligned after
@@ -350,11 +386,14 @@ def main():
     day_set('day', 22, WHITE, top=date_top)
 
     # Always-on: same sizes and positions as the normal screen, dim grey
-    font_set('aod', 158, AOD_GRAY, ('colon',), pad_x=0)
-    word_set('aod_week', WEEK, 22, AOD_GRAY, align='right', top=date_top)
-    word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top)
-    day_set('aod_day', 22, AOD_GRAY, top=date_top)
-    font_set('aod_batt', 22, AOD_GRAY, ('pct',))
+    # Always-on v2: hollow, smaller time that sits higher, wider-spaced date.
+    # Differing from the normal screen on purpose makes the dim/wake switch
+    # read as a transition.
+    font_set('aod', 136, AOD_OUTLINE, ('colon',), pad_x=0, outline=2)
+    word_set('aod_week', WEEK, 22, AOD_GRAY, align='right', top=date_top, tracking=3)
+    word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top, tracking=3)
+    day_set('aod_day', 22, AOD_GRAY, top=date_top, tracking=3)
+    font_set('aod_batt', 22, AOD_DIM, ('pct',))
     font_set('aod_stat', 22, AOD_GRAY)
     icon('aod_steps', 'footprint', 20, AOD_GRAY)
     icon('aod_cal', 'local_fire_department', 20, AOD_GRAY)
@@ -386,7 +425,6 @@ def main():
     icon('alarm', 'alarm', 24, '#ffc94d')
     icon('lock', 'lock', 24, '#8c8c96')
 
-    bar_set('aod_battery', 46, 12, lambda i: '#4a4a50')
     # Divider lines as images: FILL_RECT lines clipped neighbouring widgets on the Bip 6
     save(Image.new('RGBA', (MARGIN_X1 - MARGIN_X0, 1), '#2a2a30'), 'line/h.png')
     for h in (24, 100):
@@ -395,6 +433,7 @@ def main():
     time_w = 4 * metrics['time']['digit_w'] + metrics['time']['colon']
     assert time_w <= MARGIN_X1 - MARGIN_X0, f'time is {time_w}px, wider than the margins'
     date_row()
+    aod_layout()
     weather_row()
     vitals_grid()
     wt = metrics['weatherRow']['tap']
