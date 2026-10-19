@@ -355,6 +355,9 @@ def main():
     word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top)
     day_set('aod_day', 22, AOD_GRAY, top=date_top)
     font_set('aod_batt', 22, AOD_GRAY, ('pct',))
+    font_set('aod_stat', 22, AOD_GRAY)
+    icon('aod_steps', 'footprint', 20, AOD_GRAY)
+    icon('aod_cal', 'local_fire_department', 20, AOD_GRAY)
 
     # Icons: 20 px beside secondary text, 24 px beside primary values
     icon('steps', 'footprint', 20, STEPS)

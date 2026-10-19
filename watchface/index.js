@@ -40,6 +40,7 @@ const RIGHT_X = 244
 const RIGHT_W = 118
 const BATTERY_CY = 78 // middle of the rings
 const DIVIDERS = [136, 324, 372]
+const AOD_STATS_CY = 304 // always-on steps/calories row
 const TIME_Y = 141 // digit images carry 3 px of padding above the glyphs
 
 const digits = (set) => Array.from({ length: 10 }, (_, i) => `font/${set}/${i}.png`)
@@ -276,9 +277,9 @@ WatchFace({
 
   // ---- top left: activity rings + stats ----
   buildActivity() {
-    this.setStepRing = ring(64, 78, 45, 0x2ee6ff)
-    this.setCalRing = ring(64, 78, 34, 0xff5a36)
-    this.setStandRing = ring(64, 78, 23, 0xb6f23a)
+    // Outer to inner: steps, calories, stand
+    this.rings = [ring(64, 78, 45, 0x2ee6ff), ring(64, 78, 34, 0xff5a36), ring(64, 78, 23, 0xb6f23a)]
+    this.ringLevels = [0, 0, 0]
 
     const valY = (i) => STAT_ROW_Y(i) + Math.round((22 - M.stat.h) / 2)
     ;['steps', 'cal', 'stand', 'dist'].forEach((name, i) => img(STAT_X, STAT_ROW_Y(i) + 1, `icon/${name}.png`))
@@ -454,6 +455,23 @@ WatchFace({
     bigTime('aod', AOD)
     dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, M.dateRow, AOD)
 
+    // Steps and calories, dim, centred under the date
+    const st = M.aod_stat
+    const stepsW = 20 + 6 + 5 * st.digit_w
+    const calW = 20 + 6 + 4 * st.digit_w
+    const sx = Math.round((390 - (stepsW + 24 + calW)) / 2)
+    const sy = AOD_STATS_CY - Math.round(st.h / 2)
+    img(sx, AOD_STATS_CY - 10, 'icon/aod_steps.png', AOD)
+    create(hmUI.widget.TEXT_IMG, {
+      x: sx + 26, y: sy, w: 5 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
+      align_h: hmUI.align.LEFT, type: hmUI.data_type.STEP, show_level: AOD
+    })
+    img(sx + stepsW + 24, AOD_STATS_CY - 10, 'icon/aod_cal.png', AOD)
+    create(hmUI.widget.TEXT_IMG, {
+      x: sx + stepsW + 24 + 26, y: sy, w: 4 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
+      align_h: hmUI.align.LEFT, type: hmUI.data_type.CAL, show_level: AOD
+    })
+
     const battW = 46 + 8 + 2 * M.aod_batt.digit_w + M.aod_batt.pct
     const bx = Math.round((390 - battW) / 2)
     this.aodBatteryBar = img(bx, 336, barSrc('aod_battery', 0), AOD)
@@ -518,6 +536,7 @@ WatchFace({
     this.safely('sleep', () => this.sleep.updateInfo())
     this.readSunTimes()
     this.safely('rings', () => this.refreshActivity())
+    this.safely('swirl', () => this.swirlRings())
     this.safely('batt', () => this.refreshBattery())
     this.safely('stress', () => this.refreshStress())
     this.safely('health', () => this.refreshHealth())
@@ -527,11 +546,15 @@ WatchFace({
   },
 
   refreshActivity() {
-    this.setStepRing(pctOf(this.step.getCurrent(), this.step.getTarget()))
-    this.setCalRing(pctOf(this.calorie.getCurrent(), this.calorie.getTarget()))
     const standNow = this.stand.getCurrent()
     const standGoal = this.stand.getTarget()
-    this.setStandRing(pctOf(standNow, standGoal))
+    this.ringLevels = [
+      pctOf(this.step.getCurrent(), this.step.getTarget()),
+      pctOf(this.calorie.getCurrent(), this.calorie.getTarget()),
+      pctOf(standNow, standGoal)
+    ]
+    // While the swirl runs it owns the rings; it ends on these levels
+    if (!this.swirlTimer) this.rings.forEach((set, i) => set(this.ringLevels[i]))
     this.standText.setProperty(hmUI.prop.TEXT, `${standNow}.${standGoal}`)
   },
 
@@ -603,6 +626,31 @@ WatchFace({
     this.weekday.setProperty(hmUI.prop.SRC, `date/week_${phase}_${this.time.getDay() - 1}.png`)
   },
 
+  // Rings sweep from empty to their level each time the face appears:
+  // outer ring first, each one 120 ms after the last, easing out over 600 ms.
+  swirlRings() {
+    if (this.swirlTimer) clearInterval(this.swirlTimer)
+    const FRAME = 40
+    const DURATION = 600
+    const STAGGER = 120
+    const start = Date.now()
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3)
+    this.rings.forEach((set) => set(0))
+    this.swirlTimer = setInterval(() => {
+      const elapsed = Date.now() - start
+      let done = true
+      this.rings.forEach((set, i) => {
+        const t = clamp((elapsed - i * STAGGER) / DURATION, 0, 1)
+        if (t < 1) done = false
+        set(this.ringLevels[i] * easeOut(t))
+      })
+      if (done) {
+        clearInterval(this.swirlTimer)
+        this.swirlTimer = null
+      }
+    }, FRAME)
+  },
+
   // ~3 s of "lub-dub" at the current heart rate
   heartbeat() {
     if (!this.heartAnim || !hmUI.anim_status) return
@@ -625,6 +673,7 @@ WatchFace({
   },
 
   onDestroy() {
+    if (this.swirlTimer) clearInterval(this.swirlTimer)
     // Only the sensors this mode created exist (the always-on scene has just battery)
     const off = (sensor, fn, method = 'offChange') => sensor && fn && sensor[method](fn)
     this.safely('destroy', () => {

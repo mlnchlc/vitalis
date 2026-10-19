@@ -51,6 +51,23 @@ globalThis.hmUI = {
   }
 }
 
+// Timers run to completion immediately on a fake clock, so the snapshot
+// shows where animations end (e.g. the ring swirl).
+let fakeNow = 0
+Date.now = () => fakeNow
+globalThis.setInterval = (fn, ms) => {
+  let cleared = false
+  const prevClear = globalThis.clearInterval
+  globalThis.clearInterval = () => { cleared = true }
+  for (let i = 0; i < 500 && !cleared; i++) {
+    fakeNow += ms
+    fn()
+  }
+  globalThis.clearInterval = prevClear
+  return 0
+}
+globalThis.clearInterval = () => {}
+
 let face
 globalThis.WatchFace = (def) => { face = def }
 

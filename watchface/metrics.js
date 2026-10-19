@@ -156,6 +156,12 @@ export const M = {
     "avg_w": 12.0,
     "pct": 18
   },
+  "aod_stat": {
+    "h": 23,
+    "digit_w": 12,
+    "cap": 16,
+    "avg_w": 12.0
+  },
   "heartbeat": {
     "frames": 6,
     "pad": 3
