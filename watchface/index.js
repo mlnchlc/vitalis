@@ -525,13 +525,26 @@ WatchFace({
     this.refresh()
   },
 
-  // Every wrist raise / return to the face
+  // Every wrist raise / return to the face. The ring sweep starts first so it
+  // begins the moment the face is visible; the heavier refreshes (sleep,
+  // weather, health) run when it ends, under a second later.
   refresh() {
+    this.swirling = true // keep the rings empty until the sweep starts them
+    this.safely('rings', () => this.refreshActivity())
+    let started = false
+    try {
+      this.swirlRings(() => this.refreshRest())
+      started = true
+    } catch (e) {
+      this.swirling = false
+      this.errors.push(`swirl: ${e && e.message ? e.message : e}`)
+    }
+    if (!started) this.refreshRest()
+  },
+
+  refreshRest() {
     this.safely('sleep', () => this.sleep.updateInfo())
     this.readSunTimes()
-    this.swirling = true // keep the rings empty until the swirl starts them
-    this.safely('rings', () => this.refreshActivity())
-    this.safely('swirl', () => this.swirlRings())
     this.safely('batt', () => this.refreshBattery())
     this.safely('stress', () => this.refreshStress())
     this.safely('health', () => this.refreshHealth())
@@ -621,27 +634,39 @@ WatchFace({
   },
 
   // Rings sweep from empty to their level each time the face appears: outer
-  // ring first, each one 3 frames after the last, 12 frames ease-out each.
-  // Frame-counted (not wall-clock) so a slow timer still plays every frame.
-  swirlRings() {
+  // ring first, the next two 80 ms apart, 560 ms ease-out each (800 ms total).
+  // Progress follows the clock but never advances more than 90 ms per tick, so
+  // a late timer can't make the rings jump, and only rings that actually
+  // changed are redrawn (every redraw is a full arc update on this watch).
+  swirlRings(onDone) {
     this.stopSwirl(false) // no flash of full rings before the sweep
     const FRAME_MS = 40
-    const DURATION = 12
-    const STAGGER = 3
+    const MAX_STEP = 90
+    const STAGGER = 80
+    const RING_MS = 560
+    const TOTAL = STAGGER * (this.rings.length - 1) + RING_MS
     const easeOut = (t) => 1 - Math.pow(1 - t, 3)
+    const shown = [-1, -1, -1]
+    const draw = (i, level) => {
+      const v = Math.round(level)
+      if (v !== shown[i]) {
+        shown[i] = v
+        this.rings[i](v)
+      }
+    }
     this.swirling = true
-    this.rings.forEach((set) => set(0))
-    let frame = 0
+    this.swirlDone = onDone || null
+    this.rings.forEach((_, i) => draw(i, 0))
+    const start = Date.now()
+    let virtual = 0
     const tick = () => {
       if (!this.swirling) return
-      frame += 1
-      let done = true
-      this.rings.forEach((set, i) => {
-        const t = clamp((frame - i * STAGGER) / DURATION, 0, 1)
-        if (t < 1) done = false
-        set(this.ringLevels[i] * easeOut(t))
+      virtual = Math.min(Date.now() - start, virtual + MAX_STEP)
+      this.rings.forEach((_, i) => {
+        const t = clamp((virtual - i * STAGGER) / RING_MS, 0, 1)
+        draw(i, this.ringLevels[i] * easeOut(t))
       })
-      if (done) this.stopSwirl()
+      if (virtual >= TOTAL) this.stopSwirl()
     }
     // The watchface's own timer when the watch has it, else the global one
     if (typeof timer === 'object' && timer !== null && timer.createTimer) {
@@ -652,7 +677,8 @@ WatchFace({
     if (!this.swirling) this.swirlTimer = null // finished synchronously
   },
 
-  // Ends the swirl and leaves the rings at their real levels
+  // Ends the swirl, leaves the rings at their real levels, then runs the
+  // refresh that was waiting for it
   stopSwirl(restore = true) {
     const t = this.swirlTimer
     this.swirlTimer = null
@@ -662,6 +688,9 @@ WatchFace({
       else clearInterval(t.id)
     }
     if (restore && this.rings && this.ringLevels) this.rings.forEach((set, i) => set(this.ringLevels[i]))
+    const done = this.swirlDone
+    this.swirlDone = null
+    if (restore && done) done()
   },
 
   // ~3 s of "lub-dub" at the current heart rate
