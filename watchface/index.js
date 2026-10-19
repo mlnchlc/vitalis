@@ -529,6 +529,7 @@ WatchFace({
   refresh() {
     this.safely('sleep', () => this.sleep.updateInfo())
     this.readSunTimes()
+    this.swirling = true // keep the rings empty until the swirl starts them
     this.safely('rings', () => this.refreshActivity())
     this.safely('swirl', () => this.swirlRings())
     this.safely('batt', () => this.refreshBattery())
@@ -548,7 +549,7 @@ WatchFace({
       pctOf(standNow, standGoal)
     ]
     // While the swirl runs it owns the rings; it ends on these levels
-    if (!this.swirlTimer) this.rings.forEach((set, i) => set(this.ringLevels[i]))
+    if (!this.swirling) this.rings.forEach((set, i) => set(this.ringLevels[i]))
     this.standText.setProperty(hmUI.prop.TEXT, `${standNow}.${standGoal}`)
   },
 
@@ -619,29 +620,48 @@ WatchFace({
     this.weekday.setProperty(hmUI.prop.SRC, `date/week_${phase}_${this.time.getDay() - 1}.png`)
   },
 
-  // Rings sweep from empty to their level each time the face appears:
-  // outer ring first, each one 120 ms after the last, easing out over 600 ms.
+  // Rings sweep from empty to their level each time the face appears: outer
+  // ring first, each one 3 frames after the last, 12 frames ease-out each.
+  // Frame-counted (not wall-clock) so a slow timer still plays every frame.
   swirlRings() {
-    if (this.swirlTimer) clearInterval(this.swirlTimer)
-    const FRAME = 40
-    const DURATION = 600
-    const STAGGER = 120
-    const start = Date.now()
+    this.stopSwirl(false) // no flash of full rings before the sweep
+    const FRAME_MS = 40
+    const DURATION = 12
+    const STAGGER = 3
     const easeOut = (t) => 1 - Math.pow(1 - t, 3)
+    this.swirling = true
     this.rings.forEach((set) => set(0))
-    this.swirlTimer = setInterval(() => {
-      const elapsed = Date.now() - start
+    let frame = 0
+    const tick = () => {
+      if (!this.swirling) return
+      frame += 1
       let done = true
       this.rings.forEach((set, i) => {
-        const t = clamp((elapsed - i * STAGGER) / DURATION, 0, 1)
+        const t = clamp((frame - i * STAGGER) / DURATION, 0, 1)
         if (t < 1) done = false
         set(this.ringLevels[i] * easeOut(t))
       })
-      if (done) {
-        clearInterval(this.swirlTimer)
-        this.swirlTimer = null
-      }
-    }, FRAME)
+      if (done) this.stopSwirl()
+    }
+    // The watchface's own timer when the watch has it, else the global one
+    if (typeof timer === 'object' && timer !== null && timer.createTimer) {
+      this.swirlTimer = { face: true, id: timer.createTimer(FRAME_MS, FRAME_MS, tick, {}) }
+    } else {
+      this.swirlTimer = { face: false, id: setInterval(tick, FRAME_MS) }
+    }
+    if (!this.swirling) this.swirlTimer = null // finished synchronously
+  },
+
+  // Ends the swirl and leaves the rings at their real levels
+  stopSwirl(restore = true) {
+    const t = this.swirlTimer
+    this.swirlTimer = null
+    this.swirling = false
+    if (t) {
+      if (t.face) timer.stopTimer(t.id)
+      else clearInterval(t.id)
+    }
+    if (restore && this.rings && this.ringLevels) this.rings.forEach((set, i) => set(this.ringLevels[i]))
   },
 
   // ~3 s of "lub-dub" at the current heart rate
@@ -666,7 +686,7 @@ WatchFace({
   },
 
   onDestroy() {
-    if (this.swirlTimer) clearInterval(this.swirlTimer)
+    this.stopSwirl()
     // Only the sensors this mode created exist (the always-on scene has just battery)
     const off = (sensor, fn, method = 'offChange') => sensor && fn && sensor[method](fn)
     this.safely('destroy', () => {

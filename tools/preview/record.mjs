@@ -44,7 +44,7 @@ globalThis.hmUI = {
       setProperty(prop, v) {
         if (prop === 'TEXT') w.text = v
         else if (prop === 'SRC') w.src = v
-        else if (prop === 'MORE') Object.assign(w, v)
+        else if (prop === 'MORE') { Object.assign(w, v); if (w.widget === 'ARC_PROGRESS') (w.history ||= []).push(v.level) }
         else if (prop === 'VISIBLE') w.visible = v
       }
     }
