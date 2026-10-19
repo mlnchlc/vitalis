@@ -448,7 +448,7 @@ WatchFace({
     this.stressIcon = img(C.stress.iconX, C.stress.iconY, 'icon/stress.png')
   },
 
-  // ---- always-on display: hollow time (same spot), spaced date, steps/kcal, battery % ----
+  // ---- always-on display: hollow time (same spot), spaced date, steps / kcal / battery % row ----
   // The time keeps the normal screen's exact size and position but is hollow;
   // the date is letter-spaced, so the dim/wake switch reads as the digits
   // filling in.
@@ -457,36 +457,27 @@ WatchFace({
     bigTime('aod', AOD) // same position as the normal time
     dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, A, AOD)
 
-    // Steps and calories, dim, centred under the date
+    // Steps, calories and battery % on one row, dim, centred under the date
     const st = M.aod_stat
     const cy = A.statsCy
-    const stepsW = 20 + 6 + 5 * st.digit_w
-    const calW = 20 + 6 + 4 * st.digit_w
-    const sx = Math.round((390 - (stepsW + 28 + calW)) / 2)
+    const GAP = 22
+    const items = [
+      { icon: 'aod_steps', type: hmUI.data_type.STEP, digits: 5 },
+      { icon: 'aod_cal', type: hmUI.data_type.CAL, digits: 4 },
+      { icon: 'aod_batt', type: hmUI.data_type.BATTERY, digits: 3, unit: true }
+    ]
+    const widths = items.map((it) => 26 + it.digits * st.digit_w + (it.unit ? st.digit_w + 2 : 0))
+    let x = Math.round((390 - (widths.reduce((a, w) => a + w, 0) + GAP * (items.length - 1))) / 2)
     const sy = cy - Math.round(st.h / 2)
-    img(sx, cy - 10, 'icon/aod_steps.png', AOD)
-    create(hmUI.widget.TEXT_IMG, {
-      x: sx + 26, y: sy, w: 5 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
-      align_h: hmUI.align.LEFT, type: hmUI.data_type.STEP, show_level: AOD
-    })
-    img(sx + stepsW + 28, cy - 10, 'icon/aod_cal.png', AOD)
-    create(hmUI.widget.TEXT_IMG, {
-      x: sx + stepsW + 28 + 26, y: sy, w: 4 * st.digit_w, h: st.h, font_array: digits('aod_stat'), h_space: 0,
-      align_h: hmUI.align.LEFT, type: hmUI.data_type.CAL, show_level: AOD
-    })
-
-    // Battery %: small, dark grey, centred, no bar
-    create(hmUI.widget.TEXT_IMG, {
-      x: 0,
-      y: A.battCy - Math.round(M.aod_batt.h / 2),
-      w: 390,
-      h: M.aod_batt.h,
-      font_array: digits('aod_batt'),
-      h_space: 0,
-      align_h: hmUI.align.CENTER_H,
-      type: hmUI.data_type.BATTERY,
-      ...units('font/aod_batt/pct.png'),
-      show_level: AOD
+    items.forEach((it, i) => {
+      img(x, cy - 10, `icon/${it.icon}.png`, AOD)
+      create(hmUI.widget.TEXT_IMG, {
+        x: x + 26, y: sy, w: widths[i] - 26, h: st.h, font_array: digits('aod_stat'), h_space: 0,
+        align_h: hmUI.align.LEFT, type: it.type,
+        ...(it.unit ? units('font/aod_stat/pct.png') : {}),
+        show_level: AOD
+      })
+      x += widths[i] + GAP
     })
   },
 

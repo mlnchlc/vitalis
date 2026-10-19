@@ -285,7 +285,7 @@ def date_row():
 def aod_layout():
     """Always-on positions (screen px). The time is at the normal screen's
     position (TIME_Y in index.js); date on y 274 (the normal date's row),
-    steps/calories on y 312, battery % on y 356."""
+    steps, calories and battery % share one row on y 330."""
     t, wk, mo, day = metrics['aod'], metrics['aod_week'], metrics['aod_month'], metrics['aod_day']
     gap = 14
     total = wk['w'] + gap + day['w'] + gap + mo['w']
@@ -295,8 +295,7 @@ def aod_layout():
         'week': {'x': x, 'y': dy},
         'day': {'x': x + wk['w'] + gap, 'y': dy},
         'month': {'x': x + wk['w'] + gap + day['w'] + gap, 'y': dy},
-        'statsCy': 312,
-        'battCy': 356,
+        'statsCy': 330,
     }
 
 
@@ -393,10 +392,10 @@ def main():
     word_set('aod_week', WEEK, 22, AOD_GRAY, align='right', top=date_top, tracking=3)
     word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top, tracking=3)
     day_set('aod_day', 22, AOD_GRAY, top=date_top, tracking=3)
-    font_set('aod_batt', 22, AOD_DIM, ('pct',))
-    font_set('aod_stat', 22, AOD_GRAY)
+    font_set('aod_stat', 22, AOD_GRAY, ('pct',))
     icon('aod_steps', 'footprint', 20, AOD_GRAY)
     icon('aod_cal', 'local_fire_department', 20, AOD_GRAY)
+    icon('aod_batt', 'battery_horiz_075', 20, AOD_GRAY)
 
     # Icons: 20 px beside secondary text, 24 px beside primary values
     icon('steps', 'footprint', 20, STEPS)

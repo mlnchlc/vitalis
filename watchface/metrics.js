@@ -149,18 +149,12 @@ export const M = {
     "h": 26,
     "w": 25
   },
-  "aod_batt": {
+  "aod_stat": {
     "h": 23,
     "digit_w": 12,
     "cap": 16,
     "avg_w": 12.0,
     "pct": 18
-  },
-  "aod_stat": {
-    "h": 23,
-    "digit_w": 12,
-    "cap": 16,
-    "avg_w": 12.0
   },
   "heartbeat": {
     "frames": 6,
@@ -193,8 +187,7 @@ export const M = {
       "x": 222,
       "y": 261
     },
-    "statsCy": 312,
-    "battCy": 356
+    "statsCy": 330
   },
   "weatherRow": {
     "tempIcon": {
