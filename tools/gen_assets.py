@@ -283,20 +283,20 @@ def date_row():
 
 
 def aod_layout():
-    """Always-on positions (screen px): time centred on y 151, date on y 232,
-    steps/calories row on y 280, battery % on y 357."""
+    """Always-on positions (screen px). The time is at the normal screen's
+    position (TIME_Y in index.js); date on y 274 (the normal date's row),
+    steps/calories on y 312, battery % on y 356."""
     t, wk, mo, day = metrics['aod'], metrics['aod_week'], metrics['aod_month'], metrics['aod_day']
     gap = 14
     total = wk['w'] + gap + day['w'] + gap + mo['w']
     x = round((390 - total) / 2)
-    dy = round(232 - wk['h'] / 2)
+    dy = round(274 - wk['h'] / 2)
     metrics['aodLayout'] = {
-        'timeY': round(151 - (t['h'] - 1 - PAD - t['cap'] / 2)),
         'week': {'x': x, 'y': dy},
         'day': {'x': x + wk['w'] + gap, 'y': dy},
         'month': {'x': x + wk['w'] + gap + day['w'] + gap, 'y': dy},
-        'statsCy': 280,
-        'battCy': 357,
+        'statsCy': 312,
+        'battCy': 356,
     }
 
 
@@ -386,10 +386,10 @@ def main():
     day_set('day', 22, WHITE, top=date_top)
 
     # Always-on: same sizes and positions as the normal screen, dim grey
-    # Always-on v2: hollow, smaller time that sits higher, wider-spaced date.
-    # Differing from the normal screen on purpose makes the dim/wake switch
-    # read as a transition.
-    font_set('aod', 136, AOD_OUTLINE, ('colon',), pad_x=0, outline=2)
+    # Always-on v2: the time keeps its exact size and position but turns hollow;
+    # the date is letter-spaced. The dim/wake switch reads as the digits
+    # filling in.
+    font_set('aod', 158, AOD_OUTLINE, ('colon',), pad_x=0, outline=2)
     word_set('aod_week', WEEK, 22, AOD_GRAY, align='right', top=date_top, tracking=3)
     word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top, tracking=3)
     day_set('aod_day', 22, AOD_GRAY, top=date_top, tracking=3)

@@ -448,12 +448,13 @@ WatchFace({
     this.stressIcon = img(C.stress.iconX, C.stress.iconY, 'icon/stress.png')
   },
 
-  // ---- always-on display: hollow time, spaced date, steps/kcal, battery % ----
-  // Deliberately different from the normal screen (outline digits, higher and
-  // smaller) so the dim/wake switch reads as a transition.
+  // ---- always-on display: hollow time (same spot), spaced date, steps/kcal, battery % ----
+  // The time keeps the normal screen's exact size and position but is hollow;
+  // the date is letter-spaced, so the dim/wake switch reads as the digits
+  // filling in.
   buildAod() {
     const A = M.aodLayout
-    bigTime('aod', AOD, A.timeY)
+    bigTime('aod', AOD) // same position as the normal time
     dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, A, AOD)
 
     // Steps and calories, dim, centred under the date
