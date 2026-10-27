@@ -111,7 +111,8 @@ function value(set, opts) {
   })
 }
 
-function tap(x, y, w, h, overlay, appId) {
+// press: the image shown while held; pass the overlay name itself for no highlight
+function tap(x, y, w, h, overlay, appId, press = `${overlay}_press`) {
   create(hmUI.widget.BUTTON, {
     x,
     y,
@@ -119,7 +120,7 @@ function tap(x, y, w, h, overlay, appId) {
     h,
     text: '',
     normal_src: `press/${overlay}.png`,
-    press_src: `press/${overlay}_press.png`,
+    press_src: `press/${press}.png`,
     show_level: NORMAL,
     click_func: () => {
       // An app the watch doesn't have (e.g. Readiness) just does nothing
@@ -334,7 +335,9 @@ WatchFace({
     // Weekday is drawn by refreshAccent(): its colour follows the time of day
     this.weekday = img(R.week.x, R.week.y, 'date/week_day_0.png')
     dateGroup({ day: 'day', month: 'month' }, R, NORMAL)
-    tap(24, R.week.y - 3, 342, 24, 'date', SYSTEM_APP_CALENDAR)
+    // Transparent in both states: the grey press highlight showed as a band
+    // behind the date on the watch
+    tap(24, R.week.y - 3, 342, 24, 'date', SYSTEM_APP_CALENDAR, 'date')
   },
 
   // ---- middle: weather, four equal columns ----

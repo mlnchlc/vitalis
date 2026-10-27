@@ -440,7 +440,7 @@ def main():
     press_overlay('cell', metrics['vitals']['colW'], 32, radius=10)
     press_overlay('weather', wt['w'], wt['h'], radius=10)
     press_overlay('time', MARGIN_X1 - MARGIN_X0, 116, radius=16)
-    press_overlay('date', MARGIN_X1 - MARGIN_X0, 24, radius=8)
+    save(Image.new('RGBA', (MARGIN_X1 - MARGIN_X0, 24), (0, 0, 0, 0)), 'press/date.png')  # no highlight: it showed as a grey band
     press_overlay('status', 134, 104, radius=14)
     app_icon()
 

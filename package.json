@@ -1,6 +1,6 @@
 {
   "name": "bip6-watchface",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Zepp OS watchface for the Amazfit Bip 6",
   "private": true,
   "type": "module",
