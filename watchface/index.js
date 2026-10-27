@@ -15,6 +15,7 @@ import {
 } from '@zos/router'
 import * as zosUI from '@zos/ui'
 import { getScene, SCENE_AOD } from '@zos/app'
+import { getTimeFormat, TIME_FORMAT_12 } from '@zos/settings'
 import { M } from './metrics'
 
 // Layout follows the approved "cohesive" wireframe: 390 x 450, 24 px margins,
@@ -31,7 +32,6 @@ const SHOW_LEVEL = hmUI.show_level && hmUI.show_level.ONAL_AOD !== undefined ? h
 const NORMAL = SHOW_LEVEL ? SHOW_LEVEL.ONLY_NORMAL : undefined
 const AOD = SHOW_LEVEL ? SHOW_LEVEL.ONAL_AOD : undefined
 const RING_TRACK = 0x2a2a30
-const BAR_STEPS = 10
 
 // Top band (y 28-128): rings + stats on the left, status + battery on the right
 const STAT_X = 120
@@ -45,7 +45,6 @@ const TIME_Y = 141 // digit images carry 3 px of padding above the glyphs
 const digits = (set) => Array.from({ length: 10 }, (_, i) => `font/${set}/${i}.png`)
 const words = (set, n) => Array.from({ length: n }, (_, i) => `date/${set}_${i}.png`)
 const units = (src) => ({ unit_en: src, unit_sc: src, unit_tc: src, imperial_unit_en: src, imperial_unit_sc: src, imperial_unit_tc: src })
-const barSrc = (name, pct) => `bar/${name}/${Math.max(0, Math.min(BAR_STEPS, Math.round((pct / 100) * BAR_STEPS)))}.png`
 const pctOf = (cur, target) => (target > 0 ? Math.min(100, (cur * 100) / target) : 0)
 const pad2 = (n) => String(n).padStart(2, '0')
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
@@ -81,6 +80,15 @@ function create(type, opts = {}) {
 function inAodScene() {
   try {
     return getScene() === SCENE_AOD
+  } catch (e) {
+    return false
+  }
+}
+
+// 12-hour time adds AM/PM after the date, so the date group is laid out wider
+function is12h() {
+  try {
+    return getTimeFormat() === TIME_FORMAT_12
   } catch (e) {
     return false
   }
@@ -192,12 +200,27 @@ function dateGroup(sets, pos, show_level) {
   })
 }
 
-function bigTime(set, show_level, y = TIME_Y) {
+// ampm: { x, y, set } of the AM/PM mark, which the watch draws only in 12-hour mode
+function bigTime(set, show_level, ampm) {
   const width = 4 * M[set].digit_w + M[set].colon
+  const marks = ampm
+    ? {
+        am_x: ampm.x,
+        am_y: ampm.y,
+        am_sc_path: `date/${ampm.set}_0.png`,
+        am_tc_path: `date/${ampm.set}_0.png`,
+        am_en_path: `date/${ampm.set}_0.png`,
+        pm_x: ampm.x,
+        pm_y: ampm.y,
+        pm_sc_path: `date/${ampm.set}_1.png`,
+        pm_tc_path: `date/${ampm.set}_1.png`,
+        pm_en_path: `date/${ampm.set}_1.png`
+      }
+    : {}
   create(hmUI.widget.IMG_TIME, {
     hour_zero: 1,
     hour_startX: Math.round((390 - width) / 2),
-    hour_startY: y,
+    hour_startY: TIME_Y,
     hour_array: digits(set),
     hour_space: 0,
     hour_unit_sc: `font/${set}/colon.png`,
@@ -208,6 +231,7 @@ function bigTime(set, show_level, y = TIME_Y) {
     minute_array: digits(set),
     minute_space: 0,
     minute_follow: 1,
+    ...marks,
     show_level
   })
 }
@@ -229,7 +253,8 @@ WatchFace({
     this.safely('battery', () => this.buildBattery())
     this.safely('lines', () => DIVIDERS.forEach(hline))
     this.safely('time', () => {
-      bigTime('time', NORMAL)
+      const R = is12h() ? M.dateRow12 : M.dateRow
+      bigTime('time', NORMAL, R.ampm && { ...R.ampm, set: 'ampm' })
       tap(24, TIME_Y, 342, 116, 'time', SYSTEM_APP_ALARM)
     })
     this.safely('date', () => this.buildDate())
@@ -313,9 +338,9 @@ WatchFace({
     })
   },
 
-  // ---- top right: battery, % coloured by charge (no bar) ----
+  // ---- top right: battery, icon fill and % coloured by charge ----
   buildBattery() {
-    img(RIGHT_X, BATTERY_CY - 12, 'icon/battery.png')
+    this.batteryIcon = img(RIGHT_X, BATTERY_CY - 12, 'icon/battery/good_75.png')
     const b = M.batt
     this.showBattery = tintedValue(
       ['batt', 'batt_amber', 'batt_red'],
@@ -331,7 +356,7 @@ WatchFace({
 
   // ---- middle: date (positions computed by gen_assets.py) ----
   buildDate() {
-    const R = M.dateRow
+    const R = is12h() ? M.dateRow12 : M.dateRow
     // Weekday is drawn by refreshAccent(): its colour follows the time of day
     this.weekday = img(R.week.x, R.week.y, 'date/week_day_0.png')
     dateGroup({ day: 'day', month: 'month' }, R, NORMAL)
@@ -340,7 +365,7 @@ WatchFace({
     tap(24, R.week.y - 3, 342, 24, 'date', SYSTEM_APP_CALENDAR, 'date')
   },
 
-  // ---- middle: weather, four equal columns ----
+  // ---- middle: weather, four equal columns; the first icon shows the condition ----
   buildWeather() {
     const R = M.weatherRow
     const temp = {
@@ -354,9 +379,18 @@ WatchFace({
       ['low', { type: hmUI.data_type.WEATHER_LOW, ...temp }],
       ['hum', { type: hmUI.data_type.HUMIDITY, invalid_image: 'font/wx/invalid.png', ...units('font/wx/pct.png') }]
     ]
+    // The condition icon is indexed by the weather code (0-28)
+    create(hmUI.widget.IMG_LEVEL, {
+      x: R.tempIcon.x,
+      y: R.tempIcon.y,
+      image_array: Array.from({ length: 29 }, (_, i) => `icon/weather/${i}.png`),
+      image_length: 29,
+      type: hmUI.data_type.WEATHER_CURRENT,
+      show_level: NORMAL
+    })
     fields.forEach(([key, opts]) => {
       const icon = R[`${key}Icon`]
-      img(icon.x, icon.y, icon.src)
+      if (icon.src) img(icon.x, icon.y, icon.src)
       value('wx', { ...R[key], ...opts })
     })
     tap(R.tap.x, R.tap.y, R.tap.w, R.tap.h, 'weather', SYSTEM_APP_WEATHER)
@@ -372,7 +406,6 @@ WatchFace({
     const at = (key) => [C[key].x, C[key].y, C[key].w]
 
     // Heart rate: animated icon, value coloured by HR zone
-    const hb = M.heartbeat
     this.showHr = tintedValue(['tile', 'tile_orange', 'tile_red'], () => ({}), invalid, ...at('hr'))
 
     this.showSpo2 = tintedValue(['tile', 'tile_red'], (set) => units(`font/${set}/pct.png`), invalid, ...at('spo2'))
@@ -456,8 +489,8 @@ WatchFace({
   // the date is letter-spaced, so the dim/wake switch reads as the digits
   // filling in.
   buildAod() {
-    const A = M.aodLayout
-    bigTime('aod', AOD) // same position as the normal time
+    const A = is12h() ? M.aodLayout12 : M.aodLayout
+    bigTime('aod', AOD, A.ampm && { ...A.ampm, set: 'aod_ampm' }) // same position as the normal time
     dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, A, AOD)
 
     // Steps, calories and battery % on one row, dim, centred under the date
@@ -547,8 +580,9 @@ WatchFace({
   refreshBattery() {
     const level = this.battery.getCurrent()
     if (this.showBattery) {
-      const set = level <= BATTERY_CRITICAL ? 'batt_red' : level <= BATTERY_LOW ? 'batt_amber' : 'batt'
-      this.showBattery(set, String(level))
+      const tier = level <= BATTERY_CRITICAL ? 'red' : level <= BATTERY_LOW ? 'amber' : 'good'
+      this.showBattery(tier === 'good' ? 'batt' : `batt_${tier}`, String(level))
+      this.batteryIcon.setProperty(hmUI.prop.SRC, `icon/battery/${tier}_${Math.round(clamp(level, 0, 100) / 25) * 25}.png`)
     }
   },
 

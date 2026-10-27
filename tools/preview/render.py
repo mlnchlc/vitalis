@@ -25,6 +25,8 @@ SAMPLE = {
     'HEART': '74', 'SPO2': '98', 'SLEEP': '07.32', 'STRESS': '32', 'BIO_CHARGE': '72', 'UVI': '3', 'HRV': '48', 'PAI_WEEKLY': '86',
 }
 TIME = ('10', '08')
+AMPM = None  # 'AM' / 'PM' when the recording was made in 12-hour mode
+WEATHER_CODE = 3  # sunny
 STATUS_ON = True  # draw every status icon, as if all were active
 WEEKDAY = 5  # SAT (Monday first)
 DAY, MONTH = '18', 9  # OCT
@@ -82,6 +84,9 @@ def draw_time(canvas, w):
     colon = load(w['hour_unit_en'])
     canvas.alpha_composite(colon, (x, w['hour_startY']))
     draw_digits(canvas, x + colon.width, w['hour_startY'], TIME[1], w['minute_array'], w.get('minute_space', 0))
+    if AMPM and 'am_x' in w:
+        mark = AMPM.lower()
+        canvas.alpha_composite(load(w[f'{mark}_en_path']), (w[f'{mark}_x'], w[f'{mark}_y']))
 
 
 def draw_date(canvas, w):
@@ -139,8 +144,11 @@ def render(widgets, level):
             frame = w.get('default_frame_index', 0)
             canvas.alpha_composite(load(f"{w['anim_path']}/{w['anim_prefix']}_{frame}.{w['anim_ext']}"), (w['x'], w['y']))
         elif t == 'IMG_LEVEL':
-            v = int(SAMPLE.get(w.get('type'), '0'))
-            idx = round(v / 100 * (w['image_length'] - 1))
+            if w.get('type') == 'WEATHER_CURRENT':
+                idx = WEATHER_CODE  # with images, WEATHER_CURRENT is the condition code
+            else:
+                v = int(SAMPLE.get(w.get('type'), '0'))
+                idx = round(v / 100 * (w['image_length'] - 1))
             canvas.alpha_composite(load(w['image_array'][idx]), (w['x'], w['y']))
         # BUTTON overlays are transparent until pressed; WIDGET_DELEGATE draws nothing
     mask = Image.new('L', (W * SS, H * SS), 0)
@@ -151,10 +159,11 @@ def render(widgets, level):
 
 
 def main():
-    global TIME
+    global TIME, AMPM
     with open(sys.argv[1]) as f:
         data = json.load(f)
     TIME = (data['time'][:2], data['time'][2:])
+    AMPM = data.get('ampm')
     widgets = data['widgets']
     out_dir = os.path.join(ROOT, 'preview')
     os.makedirs(out_dir, exist_ok=True)

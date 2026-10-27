@@ -130,6 +130,10 @@ export const M = {
     "h": 26,
     "w": 22
   },
+  "ampm": {
+    "h": 26,
+    "w": 24
+  },
   "aod": {
     "h": 119,
     "digit_w": 73,
@@ -148,6 +152,10 @@ export const M = {
   "aod_day": {
     "h": 26,
     "w": 25
+  },
+  "aod_ampm": {
+    "h": 26,
+    "w": 27
   },
   "aod_stat": {
     "h": 23,
@@ -174,6 +182,24 @@ export const M = {
       "y": 261
     }
   },
+  "dateRow12": {
+    "week": {
+      "x": 127,
+      "y": 261
+    },
+    "day": {
+      "x": 170,
+      "y": 261
+    },
+    "month": {
+      "x": 198,
+      "y": 261
+    },
+    "ampm": {
+      "x": 239,
+      "y": 261
+    }
+  },
   "aodLayout": {
     "week": {
       "x": 126,
@@ -189,11 +215,29 @@ export const M = {
     },
     "statsCy": 330
   },
+  "aodLayout12": {
+    "week": {
+      "x": 106,
+      "y": 261
+    },
+    "day": {
+      "x": 163,
+      "y": 261
+    },
+    "month": {
+      "x": 202,
+      "y": 261
+    },
+    "ampm": {
+      "x": 257,
+      "y": 261
+    },
+    "statsCy": 330
+  },
   "weatherRow": {
     "tempIcon": {
       "x": 34,
-      "y": 289,
-      "src": "icon/temp.png"
+      "y": 289
     },
     "temp": {
       "x": 64,

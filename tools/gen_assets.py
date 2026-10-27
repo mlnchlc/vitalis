@@ -25,7 +25,6 @@ SYMBOLS = os.path.join(FONTS, 'MaterialSymbolsRounded.ttf')
 WHITE = '#ffffff'
 AOD_GRAY = '#7a7a80'
 AOD_OUTLINE = '#8d8d94'
-AOD_DIM = '#5a5a62'
 ORANGE = '#ff8a1f'
 STEPS = '#2ee6ff'
 CAL = '#ff5a36'
@@ -36,10 +35,8 @@ SPO2 = '#ff8fa3'  # heart family: red / rose / pink
 STRESS = '#ffb020'
 HYBRID = '#2dd4bf'  # recovery family: teal / aqua / green
 HRV = '#ff6fae'
-READINESS = '#f5c542'
 PAI = '#4ade80'
 SLEEP = '#67e8f9'
-TEMP = '#ff8a3d'
 HUMID = '#38bdf8'
 GOOD = '#34d399'
 WARN = '#ffb020'
@@ -51,6 +48,41 @@ STRESS_ZONES = {'relaxed': '#4da3ff', 'normal': '#34d399', 'medium': '#ffb020', 
 TILE_TINTS = {'orange': '#ff9f43', 'red': '#ff4545', 'amber': '#ffb020'}
 # Weekday accent by time of day
 WEEK_PHASES = {'dawn': '#ffc46b', 'day': ORANGE, 'dusk': '#ff5e7e', 'night': '#7b8cff'}
+AMPM = '#8d8d94'
+# Weather condition icons, indexed by the Zepp weather code 0-28
+WX_COLORS = {'sun': '#ffd84d', 'night': '#7b8cff', 'cloud': '#b8c4d6', 'rain': HUMID,
+             'snow': '#e0f2ff', 'storm': '#a78bfa', 'fog': '#9ca3af'}
+WEATHER_CODES = [
+    ('partly_cloudy_day', 'cloud'),    # 0 cloudy
+    ('rainy', 'rain'),                 # 1 showers
+    ('weather_snowy', 'snow'),         # 2 snow showers
+    ('sunny', 'sun'),                  # 3 sunny
+    ('cloud', 'cloud'),                # 4 overcast
+    ('rainy', 'rain'),                 # 5 light rain
+    ('weather_snowy', 'snow'),         # 6 light snow
+    ('rainy', 'rain'),                 # 7 moderate rain
+    ('weather_snowy', 'snow'),         # 8 moderate snow
+    ('ac_unit', 'snow'),               # 9 heavy snow
+    ('rainy', 'rain'),                 # 10 heavy rain
+    ('airwave', 'fog'),                # 11 sandstorm
+    ('weather_mix', 'rain'),           # 12 rain and snow
+    ('foggy', 'fog'),                  # 13 fog
+    ('mist', 'fog'),                   # 14 hazy
+    ('thunderstorm', 'storm'),         # 15 thunderstorm
+    ('ac_unit', 'snow'),               # 16 snowstorm
+    ('mist', 'fog'),                   # 17 floating dust
+    ('rainy', 'rain'),                 # 18 very heavy rainstorm
+    ('weather_hail', 'rain'),          # 19 rain and hail
+    ('thunderstorm', 'storm'),         # 20 thunderstorm and hail
+    ('rainy', 'rain'),                 # 21 heavy rainstorm
+    ('mist', 'fog'),                   # 22 dust
+    ('airwave', 'fog'),                # 23 heavy sandstorm
+    ('rainy', 'rain'),                 # 24 rainstorm
+    ('cloud_off', 'cloud'),            # 25 unknown
+    ('partly_cloudy_night', 'night'),  # 26 cloudy night
+    ('rainy', 'rain'),                 # 27 showers night
+    ('clear_night', 'night'),          # 28 clear night
+]
 
 SS = 4  # supersampling factor for icons and shapes
 # Transparent rows above and below every text image. The watch drops the top
@@ -211,19 +243,27 @@ def triangle(rel, size, color, up=True):
     save(tint(img.resize((size, size), Image.LANCZOS), color), f'icon/{rel}.png')
 
 
-# ---------- bars, overlays ----------
+# ---------- battery, overlays ----------
 
-def bar_set(name, w, h, color_for, steps=10):
-    """steps+1 images: 0 = empty track, steps = full. color_for(i) picks the fill."""
-    for i in range(steps + 1):
-        big = Image.new('RGBA', (w * SS, h * SS), (0, 0, 0, 0))
-        d = ImageDraw.Draw(big)
-        r = h * SS // 2
-        d.rounded_rectangle((0, 0, w * SS - 1, h * SS - 1), r, fill=TRACK)
-        if i:
-            fw = max(h * SS, round(w * SS * i / steps))
-            d.rounded_rectangle((0, 0, fw - 1, h * SS - 1), r, fill=color_for(i))
-        save(big.resize((w, h), Image.LANCZOS), f'bar/{name}/{i}.png')
+BATTERY_STEPS = (0, 25, 50, 75, 100)
+
+
+def battery_icons(size=24):
+    """Horizontal battery outline filled to each step, in each charge colour."""
+    big = size * SS
+    body = (1 * SS, 6 * SS, 20 * SS, 18 * SS)  # x0, y0, x1, y1
+    stroke = round(1.75 * SS)
+    for tier, c in (('good', GOOD), ('amber', WARN), ('red', BAD)):
+        for step in BATTERY_STEPS:
+            img = Image.new('RGBA', (big, big), (0, 0, 0, 0))
+            d = ImageDraw.Draw(img)
+            d.rounded_rectangle(body, 3 * SS, outline=c, width=stroke)
+            d.rounded_rectangle((21 * SS, 10 * SS, 23 * SS, 14 * SS), SS, fill=c)  # terminal
+            if step:
+                inset = stroke + SS
+                x0, y0, x1, y1 = body[0] + inset, body[1] + inset, body[2] - inset, body[3] - inset
+                d.rounded_rectangle((x0, y0, x0 + round((x1 - x0) * step / 100), y1), SS, fill=c)
+            save(img.resize((size, size), Image.LANCZOS), f'icon/battery/{tier}_{step}.png')
 
 
 def press_overlay(rel, w, h, radius=14):
@@ -269,38 +309,39 @@ def cap_mid(y, m):
     return y + m['h'] - 1 - PAD - m['cap'] / 2
 
 
+def date_group(wk, day, mo, gap, y, ampm=None):
+    """Weekday, day, month (and AM/PM in 12-hour mode) centred as one group."""
+    widths = [wk['w'], day['w'], mo['w']] + ([ampm['w']] if ampm else [])
+    x = round((390 - sum(widths) - gap * (len(widths) - 1)) / 2)
+    lay = {}
+    for key, w in zip(('week', 'day', 'month', 'ampm'), widths):
+        lay[key] = {'x': x, 'y': y}
+        x += w + gap
+    return lay
+
+
 def date_row():
-    """Day, date and month centred as one group. All three share one height."""
+    """Day, date and month centred as one group. All three share one height.
+    dateRow12 adds AM/PM at the end for 12-hour time."""
     wk, mo, day = metrics['week_day'], metrics['month'], metrics['day']
-    total = wk['w'] + GAP + day['w'] + GAP + mo['w']
-    x = round((390 - total) / 2)
     y = round(DATE_CY - wk['h'] / 2)
-    metrics['dateRow'] = {
-        'week': {'x': x, 'y': y},
-        'day': {'x': x + wk['w'] + GAP, 'y': y},
-        'month': {'x': x + wk['w'] + GAP + day['w'] + GAP, 'y': y},
-    }
+    metrics['dateRow'] = date_group(wk, day, mo, GAP, y)
+    metrics['dateRow12'] = date_group(wk, day, mo, GAP, y, metrics['ampm'])
 
 
 def aod_layout():
     """Always-on positions (screen px). The time is at the normal screen's
     position (TIME_Y in index.js); date on y 274 (the normal date's row),
     steps, calories and battery % share one row on y 330."""
-    t, wk, mo, day = metrics['aod'], metrics['aod_week'], metrics['aod_month'], metrics['aod_day']
-    gap = 14
-    total = wk['w'] + gap + day['w'] + gap + mo['w']
-    x = round((390 - total) / 2)
+    wk, mo, day = metrics['aod_week'], metrics['aod_month'], metrics['aod_day']
     dy = round(274 - wk['h'] / 2)
-    metrics['aodLayout'] = {
-        'week': {'x': x, 'y': dy},
-        'day': {'x': x + wk['w'] + gap, 'y': dy},
-        'month': {'x': x + wk['w'] + gap + day['w'] + gap, 'y': dy},
-        'statsCy': 330,
-    }
+    metrics['aodLayout'] = {**date_group(wk, day, mo, 14, dy), 'statsCy': 330}
+    metrics['aodLayout12'] = {**date_group(wk, day, mo, 14, dy, metrics['aod_ampm']), 'statsCy': 330}
 
 
 def weather_row():
-    """Four equal columns: temp, high, low, humidity. Each icon+value pair is
+    """Four equal columns: temp (with the weather condition icon), high, low,
+    humidity. Each icon+value pair is
     centred in its column for a typical value; values are left-aligned after
     their icon so longer ones grow to the right."""
     r = metrics['wx']
@@ -309,7 +350,7 @@ def weather_row():
     mid = cap_mid(y, r)
     col_w = (MARGIN_X1 - MARGIN_X0) / 4
     items = [  # key, icon, icon size, typical value width, slot width
-        ('temp', 'temp', 24, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
+        ('temp', None, 24, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
         ('high', 'high', 13, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
         ('low', 'low', 13, 2 * avg + r['deg'], r['minus'] + 2 * dw + r['deg']),
         ('hum', 'humidity', 24, 2 * avg + r['pct'], 3 * dw + r['pct']),
@@ -317,7 +358,9 @@ def weather_row():
     lay = {}
     for i, (key, icon_name, size, typical, slot) in enumerate(items):
         x = round(MARGIN_X0 + col_w * i + (col_w - (size + GAP + typical)) / 2)
-        lay[key + 'Icon'] = {'x': x, 'y': round(mid - size / 2), 'src': f'icon/{icon_name}.png'}
+        lay[key + 'Icon'] = {'x': x, 'y': round(mid - size / 2)}
+        if icon_name:
+            lay[key + 'Icon']['src'] = f'icon/{icon_name}.png'
         lay[key] = {'x': x + size + GAP, 'y': y, 'w': slot}
     # Short tap area: the watch blanks about 2x a widget's height below its top,
     # and a 30 px tap here clipped the numbers in the first vitals row.
@@ -383,15 +426,16 @@ def main():
         word_set(f'week_{phase}', WEEK, 22, c, align='right', top=date_top)
     word_set('month', MONTHS, 22, WHITE, top=date_top)
     day_set('day', 22, WHITE, top=date_top)
+    word_set('ampm', ['AM', 'PM'], 22, AMPM, top=date_top)
 
-    # Always-on: same sizes and positions as the normal screen, dim grey
-    # Always-on v2: the time keeps its exact size and position but turns hollow;
+    # Always-on: the time keeps its exact size and position but turns hollow;
     # the date is letter-spaced. The dim/wake switch reads as the digits
     # filling in.
     font_set('aod', 158, AOD_OUTLINE, ('colon',), pad_x=0, outline=2)
     word_set('aod_week', WEEK, 22, AOD_GRAY, align='right', top=date_top, tracking=3)
     word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top, tracking=3)
     day_set('aod_day', 22, AOD_GRAY, top=date_top, tracking=3)
+    word_set('aod_ampm', ['AM', 'PM'], 22, AOD_GRAY, top=date_top, tracking=3)
     font_set('aod_stat', 22, AOD_GRAY, ('pct',))
     icon('aod_steps', 'footprint', 20, AOD_GRAY)
     icon('aod_cal', 'local_fire_department', 20, AOD_GRAY)
@@ -402,11 +446,12 @@ def main():
     icon('cal', 'local_fire_department', 20, CAL)
     icon('stand', 'accessibility_new', 20, STAND)
     icon('dist', 'distance', 20, DIST)
-    icon('temp', 'device_thermostat', 24, TEMP)
+    for i, (glyph, family) in enumerate(WEATHER_CODES):
+        icon(f'weather/{i}', glyph, 24, WX_COLORS[family])
     icon('humidity', 'humidity_percentage', 24, HUMID)
     triangle('high', 13, '#ff6b5a', up=True)
     triangle('low', 13, '#4da3ff', up=False)
-    icon('battery', 'battery_horiz_075', 24, GOOD)
+    battery_icons()
     icon('hr', 'ecg_heart', 24, HR)
     heartbeat_frames(24)
     icon('spo2', 'spo2', 24, SPO2)
