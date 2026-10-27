@@ -23,7 +23,6 @@ const SAMPLE = {
   time: [10, 8],
   weekday: 6,
   sun: [[6, 23], [17, 49]],
-  h12: false, // watch set to 12-hour time
   ...JSON.parse(process.env.PREVIEW_SAMPLE || '{}')
 }
 
@@ -96,7 +95,6 @@ globalThis.__app = { getScene: () => (process.env.PREVIEW_SCENE === 'aod' ? 4 : 
 // PREVIEW_NO_SHOW_LEVEL=1 mimics the Bip 6, whose @zos/ui has no show_level
 if (process.env.PREVIEW_NO_SHOW_LEVEL) delete globalThis.hmUI.show_level
 globalThis.__sensors = sensors
-globalThis.__settings = { getTimeFormat: () => (SAMPLE.h12 ? 1 : 0), TIME_FORMAT_12: 1 }
 
 // Swap the platform imports for the stubs above, keep everything else as is.
 const dir = mkdtempSync(join(tmpdir(), 'wf-preview-'))
@@ -106,7 +104,6 @@ src = src
   .replace(/import \{([^}]*)\} from '@zos\/user'/, 'const {$1} = globalThis.__user')
   .replace("import * as zosUI from '@zos/ui'", 'const zosUI = globalThis.hmUI')
   .replace(/import \{([^}]*)\} from '@zos\/app'/, 'const {$1} = globalThis.__app')
-  .replace(/import \{([^}]*)\} from '@zos\/settings'/, 'const {$1} = globalThis.__settings')
   .replace(/import \{([^}]*)\} from '@zos\/router'/s, (_, names) =>
     `const {${names}} = { launchApp() {}, ${names.split(',').map((n) => n.trim()).filter(Boolean).filter((n) => n !== 'launchApp').map((n) => `${n}: '${n}'`).join(', ')} }`)
   .replace("from './metrics'", `from '${pathToFileURL(join(root, 'watchface', 'metrics.js')).href}'`)
@@ -115,7 +112,5 @@ await import(pathToFileURL(join(dir, 'index.mjs')).href)
 
 face.build()
 const [hh, mm] = SAMPLE.time
-const shownHour = SAMPLE.h12 ? (hh % 12 || 12) : hh
-const time = `${String(shownHour).padStart(2, '0')}${String(mm).padStart(2, '0')}`
-const ampm = SAMPLE.h12 ? (hh < 12 ? 'AM' : 'PM') : null
-process.stdout.write(JSON.stringify({ time, ampm, widgets: widgets.map(({ click_func, resume_call, anim_complete_call, ...w }) => w) }, null, 1))
+const time = `${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}`
+process.stdout.write(JSON.stringify({ time, widgets: widgets.map(({ click_func, resume_call, anim_complete_call, ...w }) => w) }, null, 1))

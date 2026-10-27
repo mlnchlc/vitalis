@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "assets": "python3 tools/gen_assets.py",
-    "preview": "node tools/preview/record.mjs > preview/widgets.json && python3 tools/preview/render.py preview/widgets.json && PREVIEW_SAMPLE='{\"hr\":165,\"spo2\":89,\"sleep\":310,\"stress\":86,\"time\":[22,41],\"weekday\":3,\"h12\":true}' node tools/preview/record.mjs > preview/widgets.json && python3 tools/preview/render.py preview/widgets.json alerts.png",
+    "preview": "node tools/preview/record.mjs > preview/widgets.json && python3 tools/preview/render.py preview/widgets.json && PREVIEW_SAMPLE='{\"hr\":165,\"spo2\":89,\"sleep\":310,\"stress\":86,\"time\":[22,41],\"weekday\":3}' node tools/preview/record.mjs > preview/widgets.json && python3 tools/preview/render.py preview/widgets.json alerts.png",
     "dev": "zeus dev",
     "build": "zeus build"
   },

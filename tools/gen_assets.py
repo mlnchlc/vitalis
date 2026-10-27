@@ -48,7 +48,6 @@ STRESS_ZONES = {'relaxed': '#4da3ff', 'normal': '#34d399', 'medium': '#ffb020', 
 TILE_TINTS = {'orange': '#ff9f43', 'red': '#ff4545', 'amber': '#ffb020'}
 # Weekday accent by time of day
 WEEK_PHASES = {'dawn': '#ffc46b', 'day': ORANGE, 'dusk': '#ff5e7e', 'night': '#7b8cff'}
-AMPM = '#8d8d94'
 # Weather condition icons, indexed by the Zepp weather code 0-28
 WX_COLORS = {'sun': '#ffd84d', 'night': '#7b8cff', 'cloud': '#b8c4d6', 'rain': HUMID,
              'snow': '#e0f2ff', 'storm': '#a78bfa', 'fog': '#9ca3af'}
@@ -309,24 +308,22 @@ def cap_mid(y, m):
     return y + m['h'] - 1 - PAD - m['cap'] / 2
 
 
-def date_group(wk, day, mo, gap, y, ampm=None):
-    """Weekday, day, month (and AM/PM in 12-hour mode) centred as one group."""
-    widths = [wk['w'], day['w'], mo['w']] + ([ampm['w']] if ampm else [])
+def date_group(wk, day, mo, gap, y):
+    """Weekday, day and month centred as one group."""
+    widths = [wk['w'], day['w'], mo['w']]
     x = round((390 - sum(widths) - gap * (len(widths) - 1)) / 2)
     lay = {}
-    for key, w in zip(('week', 'day', 'month', 'ampm'), widths):
+    for key, w in zip(('week', 'day', 'month'), widths):
         lay[key] = {'x': x, 'y': y}
         x += w + gap
     return lay
 
 
 def date_row():
-    """Day, date and month centred as one group. All three share one height.
-    dateRow12 adds AM/PM at the end for 12-hour time."""
+    """Day, date and month centred as one group. All three share one height."""
     wk, mo, day = metrics['week_day'], metrics['month'], metrics['day']
     y = round(DATE_CY - wk['h'] / 2)
     metrics['dateRow'] = date_group(wk, day, mo, GAP, y)
-    metrics['dateRow12'] = date_group(wk, day, mo, GAP, y, metrics['ampm'])
 
 
 def aod_layout():
@@ -336,7 +333,6 @@ def aod_layout():
     wk, mo, day = metrics['aod_week'], metrics['aod_month'], metrics['aod_day']
     dy = round(274 - wk['h'] / 2)
     metrics['aodLayout'] = {**date_group(wk, day, mo, 14, dy), 'statsCy': 330}
-    metrics['aodLayout12'] = {**date_group(wk, day, mo, 14, dy, metrics['aod_ampm']), 'statsCy': 330}
 
 
 def weather_row():
@@ -426,7 +422,6 @@ def main():
         word_set(f'week_{phase}', WEEK, 22, c, align='right', top=date_top)
     word_set('month', MONTHS, 22, WHITE, top=date_top)
     day_set('day', 22, WHITE, top=date_top)
-    word_set('ampm', ['AM', 'PM'], 22, AMPM, top=date_top)
 
     # Always-on: the time keeps its exact size and position but turns hollow;
     # the date is letter-spaced. The dim/wake switch reads as the digits
@@ -435,7 +430,6 @@ def main():
     word_set('aod_week', WEEK, 22, AOD_GRAY, align='right', top=date_top, tracking=3)
     word_set('aod_month', MONTHS, 22, AOD_GRAY, top=date_top, tracking=3)
     day_set('aod_day', 22, AOD_GRAY, top=date_top, tracking=3)
-    word_set('aod_ampm', ['AM', 'PM'], 22, AOD_GRAY, top=date_top, tracking=3)
     font_set('aod_stat', 22, AOD_GRAY, ('pct',))
     icon('aod_steps', 'footprint', 20, AOD_GRAY)
     icon('aod_cal', 'local_fire_department', 20, AOD_GRAY)

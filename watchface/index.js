@@ -15,7 +15,6 @@ import {
 } from '@zos/router'
 import * as zosUI from '@zos/ui'
 import { getScene, SCENE_AOD } from '@zos/app'
-import { getTimeFormat, TIME_FORMAT_12 } from '@zos/settings'
 import { M } from './metrics'
 
 // Layout follows the approved "cohesive" wireframe: 390 x 450, 24 px margins,
@@ -80,15 +79,6 @@ function create(type, opts = {}) {
 function inAodScene() {
   try {
     return getScene() === SCENE_AOD
-  } catch (e) {
-    return false
-  }
-}
-
-// 12-hour time adds AM/PM after the date, so the date group is laid out wider
-function is12h() {
-  try {
-    return getTimeFormat() === TIME_FORMAT_12
   } catch (e) {
     return false
   }
@@ -200,23 +190,8 @@ function dateGroup(sets, pos, show_level) {
   })
 }
 
-// ampm: { x, y, set } of the AM/PM mark, which the watch draws only in 12-hour mode
-function bigTime(set, show_level, ampm) {
+function bigTime(set, show_level) {
   const width = 4 * M[set].digit_w + M[set].colon
-  const marks = ampm
-    ? {
-        am_x: ampm.x,
-        am_y: ampm.y,
-        am_sc_path: `date/${ampm.set}_0.png`,
-        am_tc_path: `date/${ampm.set}_0.png`,
-        am_en_path: `date/${ampm.set}_0.png`,
-        pm_x: ampm.x,
-        pm_y: ampm.y,
-        pm_sc_path: `date/${ampm.set}_1.png`,
-        pm_tc_path: `date/${ampm.set}_1.png`,
-        pm_en_path: `date/${ampm.set}_1.png`
-      }
-    : {}
   create(hmUI.widget.IMG_TIME, {
     hour_zero: 1,
     hour_startX: Math.round((390 - width) / 2),
@@ -231,7 +206,6 @@ function bigTime(set, show_level, ampm) {
     minute_array: digits(set),
     minute_space: 0,
     minute_follow: 1,
-    ...marks,
     show_level
   })
 }
@@ -253,8 +227,7 @@ WatchFace({
     this.safely('battery', () => this.buildBattery())
     this.safely('lines', () => DIVIDERS.forEach(hline))
     this.safely('time', () => {
-      const R = is12h() ? M.dateRow12 : M.dateRow
-      bigTime('time', NORMAL, R.ampm && { ...R.ampm, set: 'ampm' })
+      bigTime('time', NORMAL)
       tap(24, TIME_Y, 342, 116, 'time', SYSTEM_APP_ALARM)
     })
     this.safely('date', () => this.buildDate())
@@ -356,7 +329,7 @@ WatchFace({
 
   // ---- middle: date (positions computed by gen_assets.py) ----
   buildDate() {
-    const R = is12h() ? M.dateRow12 : M.dateRow
+    const R = M.dateRow
     // Weekday is drawn by refreshAccent(): its colour follows the time of day
     this.weekday = img(R.week.x, R.week.y, 'date/week_day_0.png')
     dateGroup({ day: 'day', month: 'month' }, R, NORMAL)
@@ -489,8 +462,8 @@ WatchFace({
   // the date is letter-spaced, so the dim/wake switch reads as the digits
   // filling in.
   buildAod() {
-    const A = is12h() ? M.aodLayout12 : M.aodLayout
-    bigTime('aod', AOD, A.ampm && { ...A.ampm, set: 'aod_ampm' }) // same position as the normal time
+    const A = M.aodLayout
+    bigTime('aod', AOD) // same position as the normal time
     dateGroup({ week: 'aod_week', day: 'aod_day', month: 'aod_month' }, A, AOD)
 
     // Steps, calories and battery % on one row, dim, centred under the date
